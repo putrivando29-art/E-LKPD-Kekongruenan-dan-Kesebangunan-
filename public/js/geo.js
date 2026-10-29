@@ -92,3 +92,85 @@ export function svgPoint(svg, evt) {
 export function capture(node, evt) {
   try { node.setPointerCapture(evt.pointerId); } catch { /* seret tetap berjalan tanpa penahanan */ }
 }
+
+// Label berlatar (pil) untuk panjang sisi, atau lingkaran putih untuk nama titik.
+// Ukuran latar diambil dari ukuran teks sebenarnya sehingga tetap pas walau ukuran huruf diubah CSS.
+export function pill(parent, x, y, text, { textClass = 's-label', bgClass = 's-bg', round = false } = {}) {
+  const g = el('g', {}, parent);
+  const bg = el(round ? 'circle' : 'rect', { class: bgClass }, g);
+  const t = el('text', { x, y, class: textClass, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, g);
+  t.textContent = text;
+  let b;
+  try { b = t.getBBox(); } catch { b = null; }
+  if (!b || !b.width) b = { x: x - text.length * 4, y: y - 8, width: text.length * 8, height: 16 };
+  if (round) {
+    bg.setAttribute('cx', x); bg.setAttribute('cy', y);
+    bg.setAttribute('r', Math.max(b.width, b.height) / 2 + 6);
+  } else {
+    const px = 6, py = 3;
+    bg.setAttribute('x', b.x - px); bg.setAttribute('y', b.y - py);
+    bg.setAttribute('width', b.width + px * 2); bg.setAttribute('height', b.height + py * 2);
+    bg.setAttribute('rx', (b.height + py * 2) / 2);
+  }
+  return g;
+}
+
+// Penggaris visual (cm) di bagian bawah bidang gambar.
+export function ruler(parent, x0, y0, lengthCm, s) {
+  const g = el('g', { class: 'ruler', 'aria-hidden': 'true' }, parent);
+  el('rect', { x: x0 * s - 8, y: y0 * s, width: lengthCm * s + 16, height: 0.75 * s, rx: 6, class: 'ruler-body' }, g);
+  for (let i = 0; i <= lengthCm * 2; i++) {
+    const x = (x0 + i / 2) * s;
+    const long = i % 2 === 0;
+    el('line', { x1: x, y1: y0 * s, x2: x, y2: y0 * s + (long ? 0.32 : 0.18) * s, class: 'ruler-tick' }, g);
+    if (long) el('text', { x, y: y0 * s + 0.58 * s, class: 'ruler-num', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, g).textContent = i / 2;
+  }
+  return g;
+}
+
+// Animasi singkat antar dua keadaan bilangan. Dilewati bila pengguna memilih mengurangi gerakan.
+export function tween(from, to, ms, onFrame, onDone) {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || ms <= 0) { onFrame(to); onDone && onDone(); return () => {}; }
+  let stop = false;
+  const t0 = performance.now();
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  const step = now => {
+    if (stop) return;
+    const k = Math.min(1, (now - t0) / ms);
+    const e = ease(k);
+    const cur = {};
+    for (const key of Object.keys(to)) cur[key] = typeof to[key] === 'number' ? from[key] + (to[key] - from[key]) * e : to[key];
+    onFrame(cur);
+    if (k < 1) requestAnimationFrame(step); else onDone && onDone();
+  };
+  requestAnimationFrame(step);
+  return () => { stop = true; };
+}
+
+// Misi bertahap untuk simulasi: satu petunjuk tampil pada satu waktu.
+export function missionBar(container, steps) {
+  let i = 0;
+  container.innerHTML = `
+    <span class="mission-label"></span>
+    <p class="mission-text" aria-live="polite"></p>
+    <div class="mission-nav">
+      <button type="button" class="btn btn-small btn-soft" data-m="-1">Sebelumnya</button>
+      <span class="mission-dots" aria-hidden="true">${steps.map(() => '<span></span>').join('')}</span>
+      <button type="button" class="btn btn-small" data-m="1">Misi berikutnya</button>
+    </div>`;
+  const show = () => {
+    container.querySelector('.mission-label').textContent = `Misi ${i + 1} dari ${steps.length}`;
+    container.querySelector('.mission-text').textContent = steps[i];
+    container.querySelectorAll('.mission-dots span').forEach((d, k) => d.classList.toggle('on', k <= i));
+    container.querySelector('[data-m="-1"]').disabled = i === 0;
+    container.querySelector('[data-m="1"]').disabled = i === steps.length - 1;
+  };
+  container.addEventListener('click', e => {
+    const d = Number(e.target.closest('[data-m]')?.dataset.m || 0);
+    if (!d) return;
+    i = Math.max(0, Math.min(steps.length - 1, i + d));
+    show();
+  });
+  show();
+}

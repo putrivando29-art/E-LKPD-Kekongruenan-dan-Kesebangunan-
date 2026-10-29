@@ -1,11 +1,16 @@
 // Uji antarmuka di browser (Playwright + Chromium) terhadap server yang sedang berjalan.
-// Pemakaian: node test/ui-flow.js http://localhost:3000 KODEKELAS email-guru sandi-guru folder-tangkapan-layar
+// Pemakaian: KODE_AKSES_GURU=... node test/ui-flow.js http://localhost:3000 folder-tangkapan-layar
+// Server harus dijalankan dengan KODE_AKSES_GURU yang sama.
 'use strict';
 const { chromium } = require('playwright');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const [base, code, guruEmail, guruPass, outDir] = process.argv.slice(2);
+const [base, outDir] = process.argv.slice(2);
+const ACCESS = process.env.KODE_AKSES_GURU;
+const guruEmail = `guru${Date.now()}@uji.id`;
+const guruPass = 'sandiguru-uji';
+let code;
 fs.mkdirSync(outDir, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: path.join(outDir, `${name}.png`), fullPage: true });
 const log = (...a) => console.log('•', ...a);
@@ -34,24 +39,46 @@ async function fillVisibleSection(page) {
   page.on('pageerror', e => errors.push(`[pageerror] ${e.message}`));
 
   await page.goto(base + '/#/');
-  await page.waitForSelector('.cover');
+  await page.waitForSelector('.hero');
   await shot(page, '01-beranda');
   log('Beranda tampil');
 
-  await page.click('text=Mulai Mengerjakan');
+  // ---------- Guru baru mendaftar dengan kode akses ----------
+  await page.click('text=Masuk sebagai Guru');
+  await page.click('text=Daftar pakai kode akses guru');
+  await page.fill('[name=name]', 'Bu Sari Uji');
+  await page.fill('[name=email]', guruEmail);
+  await page.fill('[name=password]', guruPass);
+  await page.fill('[name=accessCode]', 'kode-tebakan');
+  await page.click('[data-account] button');
+  await page.waitForSelector('[data-err=accessCode]:not(:empty)');
+  log('Kode akses salah ditolak server:', await page.textContent('.form-error'));
+  await page.fill('[name=accessCode]', ACCESS);
+  await page.click('[data-account] button');
+  await page.waitForSelector('[data-new-class]');
+  await page.fill('[data-new-class] [name=name]', 'VIII Uji');
+  await page.click('[data-new-class] button');
+  await page.waitForSelector('.class-info .code');
+  code = (await page.textContent('.class-info .code')).trim();
+  log('Guru terdaftar dan membuat kelas, kode kelas:', code);
+  await shot(page, '00-dasbor-awal');
+  await page.click('#logout');
+  await page.waitForSelector('.hero');
+
+  await page.click('text=Mulai Belajar');
   await page.waitForSelector('[data-login]');
-  log('Mulai Mengerjakan tanpa sesi -> halaman masuk siswa');
-  await page.click('text=Daftar dengan kode kelas');
+  log('Mulai Belajar tanpa sesi -> halaman masuk siswa');
+  await page.click('text=Daftar pakai kode kelas');
   await page.fill('[name=name]', DEWI);
   await page.fill('[name=email]', `dewi${Date.now()}@uji.id`);
   await page.fill('[name=password]', 'pendek');
   await page.fill('[name=classCode]', code);
-  await page.click('[data-register] button');
+  await page.click('[data-account] button');
   await page.waitForSelector('[data-err=password]:not(:empty)');
   log('Validasi kata sandi pendek tampil');
   await page.fill('[name=password]', 'sandidewi1');
-  await page.click('[data-register] button');
-  await page.waitForSelector('#section-title:has-text("Identitas")');
+  await page.click('[data-account] button');
+  await page.waitForSelector('#section-title:has-text("Kenalan")');
   log('Daftar berhasil -> bagian Petunjuk');
 
   await page.fill('#f-id_absen', '7');
@@ -62,11 +89,11 @@ async function fillVisibleSection(page) {
   await page.goto(base + '/#/lkpd/a1');
   await page.waitForSelector('.gate');
   log('Aktivitas 1 dikunci sampai pemantik dijawab');
-  await page.click('text=Buka Pertanyaan Pemantik');
+  await page.click('text=Buka Pemanasan');
   await page.fill('#f-p1', '   ');
   await page.waitForTimeout(300);
   const chip = await page.textContent('[data-item=p1] .q-chip');
-  if (!/Minimal 3/.test(chip)) throw new Error('isian spasi dianggap terisi: ' + chip);
+  if (!/minimal 3/.test(chip)) throw new Error('isian spasi dianggap terisi: ' + chip);
   log('Isian spasi tidak dianggap terisi:', chip);
   await fillVisibleSection(page);
   await page.fill('#f-p1', 'Ya, dua buku tulis yang sama.');
@@ -116,13 +143,13 @@ async function fillVisibleSection(page) {
   await page.click('.pager >> text=Selanjutnya');
   await page.waitForSelector('[data-sim=congruence] polygon');
   const simA = page.locator('[data-sim=congruence]');
-  const def = simA.locator('g.draggable polygon');
+  const def = simA.locator('g.draggable polygon.tri');
   const box = await def.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 - 120, box.y + box.height / 2 + 20, { steps: 8 });
   await page.mouse.up();
-  const status1 = await simA.locator('.sim-status').textContent();
+  const status1 = await simA.locator('.result-cards').textContent();
   if (!/digeser/.test(status1)) throw new Error('DEF tidak bergeser: ' + status1);
   const h = await simA.locator('.handle').boundingBox();
   await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
@@ -130,15 +157,15 @@ async function fillVisibleSection(page) {
   await page.mouse.move(h.x + 80, h.y + 60, { steps: 6 });
   await page.mouse.up();
   await simA.locator('[data-act=mirror]').click();
-  const tbl = await simA.locator('.sim-compare tbody').textContent();
-  if ((tbl.match(/Berbeda/g) || []).length) throw new Error('DEF kongruen tetapi tabel menunjukkan berbeda setelah digeser/diputar/dicermin');
-  log('Geser, putar, cermin: semua pasangan tetap "Sama". Keadaan:', (await simA.locator('.sim-status').textContent()).slice(0, 90));
+  const tbl = await simA.locator('.sim-result tbody').textContent();
+  if ((tbl.match(/Beda/g) || []).length) throw new Error('DEF kongruen tetapi tabel menunjukkan berbeda setelah digeser/diputar/dicermin');
+  log('Geser, putar, cermin: semua pasangan tetap "Sama". Keadaan:', (await simA.locator('.result-cards').textContent()).slice(0, 90));
   await simA.locator('[data-act=record]').click();
   await simA.locator('[data-act=snap]').click();
   await shot(page, '05-simA-impit');
   await simA.locator('[data-side=ef]').fill('9');
-  const tbl2 = await simA.locator('.sim-compare tbody').textContent();
-  log('EF diubah ke 9 cm -> jumlah "Berbeda":', (tbl2.match(/Berbeda/g) || []).length);
+  const tbl2 = await simA.locator('.sim-result tbody').textContent();
+  log('EF diubah ke 9 cm -> jumlah "Beda":', (tbl2.match(/Beda/g) || []).length);
   await simA.locator('#simA-note').fill('EF diperbesar menjadi 9 cm');
   await simA.locator('[data-act=record]').click();
   // Sisi tidak valid
@@ -150,7 +177,7 @@ async function fillVisibleSection(page) {
 
   const simB = page.locator('[data-sim=similarity]');
   await simB.locator('[data-k]').fill('2');
-  const sb = await simB.locator('.sim-compare').textContent();
+  const sb = await simB.locator('.sim-result').textContent();
   if (!/6 cm/.test(sb) || !/8 cm/.test(sb) || !/10 cm/.test(sb)) throw new Error('k = 2 tidak menghasilkan 6, 8, 10 cm');
   log('k = 2 -> STU 6, 8, 10 cm;', (await simB.locator('.sim-status').textContent()).replace(/\s+/g, ' ').trim());
   await simB.locator('#simB-note').fill('k = 2');
@@ -230,10 +257,20 @@ async function fillVisibleSection(page) {
 
   // Siswa tidak boleh membuka halaman guru
   await page.goto(base + '/#/guru');
-  await page.waitForSelector('text=Akses ditolak');
-  log('Siswa membuka #/guru -> Akses ditolak');
+  await page.waitForFunction(() => location.hash === '#/lkpd/petunjuk');
+  log('Siswa membuka #/guru -> diarahkan ke', await page.evaluate(() => location.hash), '| toast:', await page.textContent('#toast'));
+  const apiTry = await page.evaluate(async () => {
+    const out = {};
+    for (const [m, p] of [['GET', '/api/teacher/classes'], ['POST', '/api/teacher/invites'], ['GET', '/api/teacher/invites']]) {
+      const r = await fetch(p, { method: m, headers: { 'X-ELKPD': '1', 'Content-Type': 'application/json' }, body: m === 'POST' ? '{}' : undefined });
+      out[`${m} ${p}`] = r.status;
+    }
+    return out;
+  });
+  log('Siswa memanggil API guru langsung:', JSON.stringify(apiTry));
+  if (Object.values(apiTry).some(x => x !== 403)) throw new Error('API guru dapat diakses siswa');
   await page.click('#logout');
-  await page.waitForSelector('.cover');
+  await page.waitForSelector('.hero');
 
   // ---------- Guru ----------
   await page.click('text=Masuk sebagai Guru');
@@ -270,21 +307,21 @@ async function fillVisibleSection(page) {
   const mp = await m.newPage();
   mp.on('pageerror', e => errors.push(`[pageerror hp] ${e.message}`));
   await mp.goto(base + '/#/');
-  await mp.waitForSelector('.cover');
+  await mp.waitForSelector('.hero');
   await noOverflow(mp, 'beranda HP');
   await shot(mp, '13-hp-beranda');
-  await mp.click('text=Masuk sebagai Siswa');
+  await mp.click('text=Mulai Belajar');
   await mp.fill('[name=email]', guruEmail);
   await mp.fill('[name=password]', guruPass);
   await mp.click('[data-login] button');
   await mp.waitForSelector('.form-error:not([hidden])');
   log('Akun guru lewat pintu siswa:', await mp.textContent('.form-error'));
-  await mp.click('text=Daftar dengan kode kelas');
+  await mp.click('text=Daftar pakai kode kelas');
   await mp.fill('[name=name]', 'Eko Prasetyo');
   await mp.fill('[name=email]', `eko${Date.now()}@uji.id`);
   await mp.fill('[name=password]', 'sandieko12');
   await mp.fill('[name=classCode]', code);
-  await mp.click('[data-register] button');
+  await mp.click('[data-account] button');
   await mp.waitForSelector('#f-id_absen');
   await noOverflow(mp, 'petunjuk HP');
   await shot(mp, '14-hp-petunjuk');
@@ -296,7 +333,7 @@ async function fillVisibleSection(page) {
   await mp.waitForSelector('[data-sim=congruence] polygon');
   await noOverflow(mp, 'aktivitas 3 HP');
   // Seret dengan sentuhan
-  const tri = mp.locator('[data-sim=congruence] g.draggable polygon');
+  const tri = mp.locator('[data-sim=congruence] g.draggable polygon.tri');
   await tri.scrollIntoViewIfNeeded();
   const tb = await tri.boundingBox();
   const cx = tb.x + tb.width / 2, cy = tb.y + tb.height / 2;
@@ -307,7 +344,7 @@ async function fillVisibleSection(page) {
     for (let i = 1; i <= 5; i++) target.dispatchEvent(new PointerEvent('pointermove', opts(cx - i * 10, cy + i * 4)));
     target.dispatchEvent(new PointerEvent('pointerup', opts(cx - 50, cy + 20)));
   }, { cx, cy });
-  log('Seret sentuh di HP:', (await mp.textContent('[data-sim=congruence] .sim-status')).slice(0, 60));
+  log('Seret sentuh di HP:', (await mp.textContent('[data-sim=congruence] .result-cards')).slice(0, 60));
   await shot(mp, '15-hp-simulasi');
   await mp.goto(base + '/#/lkpd/a1');
   await mp.waitForSelector('.obs-svg polygon');

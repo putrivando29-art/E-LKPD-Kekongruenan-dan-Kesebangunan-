@@ -1,5 +1,5 @@
 // Gambar bangun untuk Aktivitas 1 dan 2 serta ilustrasi soal latihan. Semua digambar pada petak 1 cm dengan skala sama.
-import { capture, el, grid, centroid, labelPos, sideLabelPos, triMeasures, triangleFromSides, rigid, fmt, svgPoint } from './geo.js';
+import { capture, el, grid, pill, centroid, labelPos, sideLabelPos, triMeasures, triangleFromSides, rigid, fmt, svgPoint } from './geo.js';
 
 const S = 30;
 
@@ -20,7 +20,9 @@ const toPts = (key, ox, oy) => SHAPES[key].map(([x, y]) => ({ x: x + ox, y: oy -
 
 function drawPoly(g, pts, cls, { label, showMeasures, labelText }) {
   const sp = pts.map(p => ({ x: p.x * S, y: p.y * S }));
-  el('polygon', { points: sp.map(p => `${p.x},${p.y}`).join(' '), class: `tri ${cls}` }, g);
+  const d = sp.map(p => `${p.x},${p.y}`).join(' ');
+  if (!cls.includes('outline-only')) el('polygon', { points: d, class: 'halo' }, g);
+  el('polygon', { points: d, class: `tri ${cls}` }, g);
   const c = centroid(sp);
   if (labelText) {
     el('text', { x: c.x, y: c.y, class: 'shape-name', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = labelText;
@@ -28,43 +30,43 @@ function drawPoly(g, pts, cls, { label, showMeasures, labelText }) {
   if (showMeasures && pts.length === 3) {
     const m = triMeasures(pts);
     [[0, 1, m.s01], [1, 2, m.s12], [2, 0, m.s20]].forEach(([i, j, len]) => {
-      const lp = sideLabelPos(sp[i], sp[j], c, 13);
-      el('text', { x: lp.x, y: lp.y, class: 's-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = `${fmt(len)}`;
+      const lp = sideLabelPos(sp[i], sp[j], c, 15);
+      pill(g, lp.x, lp.y, `${fmt(len)} cm`);
     });
     [m.a0, m.a1, m.a2].forEach((a, i) => {
       const ap = labelPos(sp[i], c, -22);
       el('text', { x: ap.x, y: ap.y, class: 'a-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = `${fmt(a)}°`;
     });
   }
-  if (label) sp.forEach(p => el('circle', { cx: p.x, cy: p.y, r: 3, class: `vertex ${cls}` }, g));
+  if (label) sp.forEach(p => el('circle', { cx: p.x, cy: p.y, r: 3.5, class: 'vertex' }, g));
 }
 
 // Aktivitas 1 dan 2: empat bangun + alat bantu (perbesar tampilan, ukuran, bandingkan).
 export function observeFigure(root, idPrefix) {
   root.innerHTML = `
     <div class="sim-toolbar" role="group" aria-label="Alat bantu pengamatan">
-      <span class="tool-label" id="${idPrefix}-zoom-label">Tampilan</span>
-      <button type="button" class="btn btn-small" data-zoom="-1" aria-describedby="${idPrefix}-zoom-label">Perkecil</button>
+      <span class="tool-label" id="${idPrefix}-zoom-label">Ukuran tampilan</span>
+      <button type="button" class="btn btn-small btn-soft" data-zoom="-1" aria-describedby="${idPrefix}-zoom-label">Perkecil</button>
       <output class="zoom-out" aria-live="polite">100%</output>
-      <button type="button" class="btn btn-small" data-zoom="1" aria-describedby="${idPrefix}-zoom-label">Perbesar</button>
-      <label class="check-inline"><input type="checkbox" data-measure> Tampilkan ukuran sisi (cm) dan sudut</label>
+      <button type="button" class="btn btn-small btn-soft" data-zoom="1" aria-describedby="${idPrefix}-zoom-label">Perbesar</button>
+      <label class="check-inline"><input type="checkbox" data-measure> Tampilkan panjang sisi dan sudut</label>
     </div>
-    <div class="figure-scroll"><svg class="obs-svg" viewBox="0 0 ${15 * S} ${12 * S}" role="img" aria-label="Bangun A, B, C, dan D pada petak 1 cm"></svg></div>
-    <p class="figure-caption">Setiap petak berukuran 1 cm × 1 cm. Semua bangun digambar dengan skala yang sama.</p>
+    <div class="figure-scroll"><svg class="obs-svg" viewBox="0 0 ${15 * S} ${12 * S}" role="img" aria-label="Bangun A, B, C, dan D pada kotak 1 cm"></svg></div>
+    <p class="figure-caption">Satu kotak = 1 cm × 1 cm. Semua bangun digambar dengan skala yang sama.</p>
     <details class="compare">
-      <summary>Bandingkan dua bangun dengan menumpuknya</summary>
+      <summary>Bandingkan Bangun: tumpuk dua bangun</summary>
       <div class="compare-body">
         <div class="compare-pick">
           <label>Bangun tetap <select data-pick="x">${['A', 'B', 'C', 'D'].map(k => `<option ${k === 'A' ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
-          <label>Bangun yang digeser <select data-pick="y">${['A', 'B', 'C', 'D'].map(k => `<option ${k === 'D' ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+          <label>Bangun yang digeser (garis putus) <select data-pick="y">${['A', 'B', 'C', 'D'].map(k => `<option ${k === 'D' ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
         </div>
         <div class="sim-toolbar">
-          <button type="button" class="btn btn-small" data-cmp="rot">Putar 90°</button>
-          <button type="button" class="btn btn-small" data-cmp="stack">Tumpuk di sudut kiri bawah</button>
+          <button type="button" class="btn btn-small btn-soft" data-cmp="rot">Putar 90°</button>
+          <button type="button" class="btn btn-small btn-primary" data-cmp="stack">Tumpuk</button>
           <button type="button" class="btn btn-small btn-quiet" data-cmp="reset">Pisahkan lagi</button>
         </div>
         <div class="sim-stage"><svg class="cmp-svg" viewBox="0 0 ${16 * S} ${8 * S}" role="img" aria-label="Area membandingkan dua bangun"></svg></div>
-        <p class="sim-hint">Seret bangun berwarna jingga untuk menggeser, atau pilih lalu tekan tombol panah. Bangun hanya dipindah dan diputar, ukurannya tidak berubah.</p>
+        <p class="sim-hint">Seret bangun bergaris putus, atau pilih lalu tekan tombol panah. Bangun hanya dipindah dan diputar, ukurannya tetap.</p>
       </div>
     </details>`;
 
@@ -79,8 +81,7 @@ export function observeFigure(root, idPrefix) {
       const [ox, oy] = PLACE[k];
       const g = el('g', {}, svg);
       drawPoly(g, toPts(k, ox, oy), COLOR[k], { label: true, showMeasures: measure.checked });
-      el('rect', { x: (ox - 0.6) * S, y: (oy - 4.9) * S, width: 0.9 * S, height: 0.9 * S, class: 'tag-box' }, g);
-      el('text', { x: (ox - 0.15) * S, y: (oy - 4.45) * S, class: 'tag-text', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = k;
+      pill(g, (ox - 0.1) * S, (oy - 4.45) * S, k, { textClass: 'tag-text', bgClass: 'tag-box', round: true });
     }
     svg.style.width = `${zoom * 100}%`;
     root.querySelector('.zoom-out').textContent = `${Math.round(zoom * 100)}%`;
@@ -106,7 +107,7 @@ export function observeFigure(root, idPrefix) {
     const local = SHAPES[selY.value].map(([x, y]) => ({ x, y: -y }));
     // Putar terhadap titik pertama (sudut kiri bawah) agar penumpukan mudah dibandingkan.
     const yPts = rigid(local, { theta: cs.rot, t: cs.t, about: local[0] });
-    drawPoly(gY, yPts, 'shape-2 see-through', { label: true, labelText: selY.value });
+    drawPoly(gY, yPts, 'outline-only', { label: true, labelText: selY.value });
   }
   function drawCmp() {
     csvg.replaceChildren();
@@ -162,17 +163,18 @@ function ticks(g, p, q, n) {
 
 function labeledTriangle(g, pts, names, cls, sideText, tickCounts) {
   const sp = pts.map(p => ({ x: p.x * S, y: p.y * S }));
-  el('polygon', { points: sp.map(p => `${p.x},${p.y}`).join(' '), class: `tri ${cls}` }, g);
+  const d = sp.map(p => `${p.x},${p.y}`).join(' ');
+  el('polygon', { points: d, class: 'halo' }, g);
+  el('polygon', { points: d, class: `tri ${cls}` }, g);
   const c = centroid(sp);
-  sp.forEach((p, i) => {
-    el('circle', { cx: p.x, cy: p.y, r: 3, class: `vertex ${cls}` }, g);
-    const lp = labelPos(p, c, 15);
-    el('text', { x: lp.x, y: lp.y, class: 'v-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = names[i];
-  });
   [[0, 1], [1, 2], [2, 0]].forEach(([i, j], k) => {
     if (tickCounts) ticks(g, sp[i], sp[j], tickCounts[k]);
-    const lp = sideLabelPos(sp[i], sp[j], c, 16);
-    el('text', { x: lp.x, y: lp.y, class: 's-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = sideText[k];
+    const lp = sideLabelPos(sp[i], sp[j], c, 20);
+    pill(g, lp.x, lp.y, sideText[k]);
+  });
+  sp.forEach((p, i) => {
+    const lp = labelPos(p, c, 20);
+    pill(g, lp.x, lp.y, names[i], { textClass: 'v-label', bgClass: `v-bg ${cls}`, round: true });
   });
 }
 
@@ -206,14 +208,15 @@ export function problemFigure(root, kind) {
     const rect = (x, y, w, h, names, cls) => {
       const pts = [{ x, y: y + h }, { x: x + w, y: y + h }, { x: x + w, y }, { x, y }];
       const sp = pts.map(p => ({ x: p.x * S, y: p.y * S }));
-      el('polygon', { points: sp.map(p => `${p.x},${p.y}`).join(' '), class: `tri ${cls}` }, g);
+      const d = sp.map(p => `${p.x},${p.y}`).join(' ');
+      el('polygon', { points: d, class: 'halo' }, g);
+      el('polygon', { points: d, class: `tri ${cls}` }, g);
       const c = centroid(sp);
       sp.forEach((p, i) => {
-        const lp = labelPos(p, c, 14);
-        el('text', { x: lp.x, y: lp.y, class: 'v-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' }, g).textContent = names[i];
+        const lp = labelPos(p, c, 18);
+        pill(g, lp.x, lp.y, names[i], { textClass: 'v-label', bgClass: `v-bg ${cls}`, round: true });
       });
-      el('text', { x: c.x, y: sp[0].y + 18, class: 's-label', 'text-anchor': 'middle' }, g).textContent = `${fmt(w)} cm`;
-      el('text', { x: sp[1].x + 10, y: c.y, class: 's-label', 'text-anchor': 'start', 'dominant-baseline': 'middle' }, g).textContent = `${fmt(h)} cm`;
+      pill(g, c.x, c.y, `${fmt(w)} cm × ${fmt(h)} cm`);
     };
     rect(1, 2.5, 6, 4, ['K', 'L', 'M', 'N'], 'shape-1');
     rect(9, 0.8, 9, 6, ['W', 'X', 'Y', 'Z'], 'shape-2');

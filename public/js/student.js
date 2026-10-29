@@ -4,7 +4,8 @@ import { esc, fmtTime, fmtClock, toast, confirmDialog, isFilled, fillHint, secti
 import { observeFigure, problemFigure } from './figures.js';
 import { createCongruenceSim } from './sim-congruence.js';
 import { createSimilaritySim } from './sim-similarity.js';
-import { fmt } from './geo.js';
+import { fmt, missionBar } from './geo.js';
+import { icon, statusIcon, deco } from './art.js';
 
 const SAVE_DELAY = 1000;
 const RETRY_DELAY = 5000;
@@ -106,8 +107,8 @@ export class Workspace {
       } catch (e) {
         if (e.status === 0) {
           this.setSaveStatus('offline', this.localUnavailable
-            ? 'Koneksi terputus. Jangan tutup halaman ini sampai jawaban terkirim.'
-            : 'Koneksi terputus. Jawaban disimpan sementara di perangkat ini dan dikirim otomatis saat tersambung.');
+            ? 'Internet putus. Jangan tutup halaman ini sampai jawaban terkirim.'
+            : 'Internet putus. Jawaban disimpan dulu di perangkat ini, nanti dikirim sendiri.');
           this.timer = setTimeout(() => this.flush(), RETRY_DELAY);
         } else if (e.status === 401) {
           this.setSaveStatus('error', 'Sesi berakhir. Masuk kembali; jawaban yang belum terkirim tetap tersimpan di perangkat ini.');
@@ -119,7 +120,7 @@ export class Workspace {
           await this.load();
           this.app.route();
         } else {
-          this.setSaveStatus('error', `Gagal menyimpan: ${e.message} Mencoba lagi...`);
+          this.setSaveStatus('error', `Gagal menyimpan: ${e.message} Dicoba lagi...`);
           this.timer = setTimeout(() => this.flush(), RETRY_DELAY * 2);
         }
         return false;
@@ -153,27 +154,36 @@ export class Workspace {
     return { sections: out, filled, total, percent: total ? Math.round((filled / total) * 100) : 0 };
   }
 
+  // Status bagian untuk peta belajar: ikon + teks singkat.
   sectionBadge(s, p) {
     const sp = p.sections[s.id];
     const hasTeacher = sectionItems(s).some(i => i.graded === 'teacher');
     if (this.submitted) {
       if (this.state.grading.status === 'selesai') return { cls: 'done', text: 'Sudah dinilai' };
-      return hasTeacher ? { cls: 'wait', text: 'Menunggu penilaian guru' } : { cls: 'done', text: 'Dikumpulkan' };
+      return hasTeacher ? { cls: 'wait', text: 'Menunggu guru' } : { cls: 'done', text: 'Dikumpulkan' };
     }
-    if (this.state.locked.includes(s.id)) return { cls: 'locked', text: 'Sudah diperiksa, terkunci' };
-    if (sp.state === 'lengkap') return { cls: 'done', text: 'Lengkap' };
-    if (sp.state === 'sebagian') return { cls: 'part', text: `Sebagian (${sp.filled}/${sp.required})` };
-    return { cls: 'empty', text: 'Belum diisi' };
+    if (this.state.locked.includes(s.id)) return { cls: 'locked', text: 'Sudah diperiksa' };
+    if (sp.state === 'lengkap') return { cls: 'done', text: 'Selesai' };
+    if (sp.state === 'sebagian') return { cls: 'part', text: `Sedang dikerjakan (${sp.filled}/${sp.required})` };
+    return { cls: 'empty', text: 'Belum dimulai' };
+  }
+
+  // Empat status pertanyaan: Belum diisi, Sudah diisi, Perlu diperiksa guru, Selesai.
+  chipHtml(it) {
+    const v = this.state.answers[it.id];
+    if (this.submitted) {
+      if (it.graded === 'teacher' && this.state.grading.status !== 'selesai') return `<span class="q-chip chip-teacher">${statusIcon('wait')}Perlu diperiksa guru</span>`;
+      return `<span class="q-chip chip-done">${statusIcon('done')}Selesai</span>`;
+    }
+    if (!it.required) return '<span class="q-chip chip-opt">Tidak wajib</span>';
+    if (isFilled(it, v)) return `<span class="q-chip chip-filled">${statusIcon('done')}Sudah diisi</span>`;
+    return `<span class="q-chip chip-empty">${statusIcon('empty')}${esc(fillHint(it, v))}</span>`;
   }
 
   refreshStatus(id) {
     const it = this.itemDef(id);
     const chip = document.querySelector(`[data-item="${id}"] .q-chip`);
-    if (chip && it.required) {
-      const ok = isFilled(it, this.state.answers[id]);
-      chip.className = `q-chip ${ok ? 'ok' : 'no'}`;
-      chip.textContent = ok ? 'Sudah diisi' : fillHint(it, this.state.answers[id]);
-    }
+    if (chip) chip.outerHTML = this.chipHtml(it);
     const err = document.querySelector(`[data-item="${id}"] .q-error`);
     if (err) err.hidden = true;
     this.refreshToc();
@@ -181,39 +191,53 @@ export class Workspace {
   }
 
   refreshToc() {
-    const toc = document.querySelector('.toc');
-    if (!toc || !this.state) return;
+    if (!this.state) return;
     const p = this.localProgress();
-    toc.querySelector('.progress-fill').style.width = `${p.percent}%`;
-    toc.querySelector('.progress-text').textContent = `${p.filled} dari ${p.total} pertanyaan wajib terisi (${p.percent}%)`;
-    toc.querySelector('.progress-bar').setAttribute('aria-valuenow', p.percent);
-    for (const s of this.def.sections) {
-      const b = this.sectionBadge(s, p);
-      const li = toc.querySelector(`[data-toc="${s.id}"] .toc-state`);
-      if (li) { li.className = `toc-state ${b.cls}`; li.textContent = b.text; }
+    const bar = document.querySelector('.progress-card');
+    if (bar) {
+      bar.querySelector('.progress-fill').style.width = `${p.percent}%`;
+      bar.querySelector('.progress-text').textContent = `${p.filled} dari ${p.total} terisi`;
+      bar.querySelector('.progress-bar').setAttribute('aria-valuenow', p.percent);
     }
-    const sum = toc.querySelector('[data-toc="ringkasan"] .toc-state');
-    if (sum) {
-      sum.className = `toc-state ${this.submitted ? 'done' : p.filled === p.total ? 'part' : 'empty'}`;
-      sum.textContent = this.submitted ? 'Dikumpulkan' : p.filled === p.total ? 'Siap dikumpulkan' : 'Belum dikumpulkan';
-    }
+    const toc = document.querySelector('.toc');
+    if (!toc) return;
+    const set = (id, b) => {
+      const li = toc.querySelector(`[data-toc="${id}"]`);
+      if (!li) return;
+      li.querySelector('.toc-icon').innerHTML = statusIcon(b.cls);
+      li.querySelector('.toc-state').textContent = b.text;
+    };
+    for (const s of this.def.sections) set(s.id, this.sectionBadge(s, p));
+    set('ringkasan', this.submitted ? { cls: 'done', text: 'Dikumpulkan' } : p.filled === p.total ? { cls: 'part', text: 'Siap dikumpulkan' } : { cls: 'empty', text: 'Belum dikumpulkan' });
   }
 
   // ---------- Tampilan ----------
+
+  stepLabel(id) {
+    const s = this.section(id);
+    if (s?.step) return `Aktivitas ${s.step} dari 5`;
+    return { petunjuk: 'Persiapan', pemantik: 'Pemanasan', latihan: 'Latihan soal', ringkasan: 'Langkah terakhir' }[id] || '';
+  }
 
   render(container, sectionId) {
     if (!this.sectionsOrder().includes(sectionId)) sectionId = 'petunjuk';
     this.current = sectionId;
     const order = this.sectionsOrder();
     const idx = order.indexOf(sectionId);
+    const accent = sectionId === 'ringkasan' ? 'peach' : this.section(sectionId).accent;
     container.innerHTML = `
       <div class="lkpd-layout">
-        <aside class="toc" aria-label="Daftar isi LKPD">${this.tocHtml(sectionId)}</aside>
-        <section class="lkpd-main" aria-labelledby="section-title">
+        <aside class="toc" aria-label="Peta belajar">${this.tocHtml(sectionId)}</aside>
+        <section class="lkpd-main" data-accent="${accent}" aria-labelledby="section-title">
+          <div class="progress-card">
+            <span class="progress-step">${esc(this.stepLabel(sectionId))}</span>
+            <div class="progress-bar" role="progressbar" aria-label="Jumlah pertanyaan wajib yang sudah terisi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill"></div></div>
+            <p class="progress-text"></p>
+          </div>
           <div class="section-body"></div>
           <nav class="pager" aria-label="Pindah bagian">
-            ${idx > 0 ? `<a class="btn" href="#/lkpd/${order[idx - 1]}">Sebelumnya: ${esc(this.navName(order[idx - 1]))}</a>` : '<span></span>'}
-            ${idx < order.length - 1 ? `<a class="btn btn-primary" href="#/lkpd/${order[idx + 1]}">Selanjutnya: ${esc(this.navName(order[idx + 1]))}</a>` : ''}
+            ${idx > 0 ? `<a class="btn btn-soft" href="#/lkpd/${order[idx - 1]}">Sebelumnya</a>` : '<span></span>'}
+            ${idx < order.length - 1 ? `<a class="btn btn-primary btn-large" href="#/lkpd/${order[idx + 1]}">Selanjutnya: ${esc(this.navName(order[idx + 1]))}</a>` : ''}
           </nav>
         </section>
       </div>`;
@@ -229,29 +253,29 @@ export class Workspace {
   navName(id) { return id === 'ringkasan' ? 'Ringkasan' : this.section(id).nav; }
 
   tocHtml(active) {
-    const items = [...this.def.sections.map(s => ({ id: s.id, name: s.nav, title: s.title })), { id: 'ringkasan', name: 'Ringkasan', title: 'Ringkasan pengerjaan' }];
+    const items = [...this.def.sections.map(s => ({ id: s.id, name: s.step ? `${s.step}. ${s.title}` : s.nav, accent: s.accent })), { id: 'ringkasan', name: 'Ringkasan', accent: 'peach' }];
     return `
       <details class="toc-box" ${window.matchMedia('(min-width: 960px)').matches ? 'open' : ''}>
-        <summary>Daftar isi dan progres</summary>
-        <div class="progress">
-          <div class="progress-bar" role="progressbar" aria-label="Progres pengerjaan" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill"></div></div>
-          <p class="progress-text"></p>
-        </div>
+        <summary>Peta belajar</summary>
         <ol class="toc-list">
-          <li><a href="#/">Beranda</a></li>
-          ${items.map(i => `<li data-toc="${i.id}" ${i.id === active ? 'class="active"' : ''}>
-            <a href="#/lkpd/${i.id}" ${i.id === active ? 'aria-current="page"' : ''}><span class="toc-name">${esc(i.name)}</span><span class="toc-title">${esc(i.title)}</span></a>
-            <span class="toc-state"></span></li>`).join('')}
+          <li class="toc-home"><a href="#/">${icon('flag')}<span class="toc-text"><span class="toc-name">Beranda</span></span></a></li>
+          ${items.map(i => `<li data-toc="${i.id}" data-accent="${i.accent}" ${i.id === active ? 'class="active"' : ''}>
+            <a href="#/lkpd/${i.id}" ${i.id === active ? 'aria-current="page"' : ''}><span class="toc-icon"></span><span class="toc-text"><span class="toc-name">${esc(i.name)}</span><span class="toc-state"></span></span></a></li>`).join('')}
         </ol>
       </details>`;
   }
 
   sectionHeader(s) {
+    const badge = s.step ? `<span class="big-num">${s.step}</span>` : icon(s.icon);
     return `
       <header class="section-head">
-        ${s.kicker ? `<span class="act-tag">${esc(s.kicker)}</span>` : ''}
-        <h1 id="section-title" tabindex="-1">${esc(s.title)}</h1>
+        <span class="section-badge" aria-hidden="true">${badge}</span>
+        <div>
+          ${s.kicker ? `<span class="section-kicker">${esc(s.kicker)}</span>` : ''}
+          <h1 id="section-title" tabindex="-1">${esc(s.title)}</h1>
+        </div>
         <p class="lead">${esc(s.intro)}</p>
+        ${deco.sparkle('#fff')}${deco.star('#fff')}
       </header>`;
   }
 
@@ -262,34 +286,40 @@ export class Workspace {
     if (main.includes(s.id) && !pemantikDone && !this.submitted) {
       body.innerHTML = `${this.sectionHeader(s)}
         <div class="card gate">
-          <h2>Jawab pertanyaan pemantik terlebih dahulu</h2>
-          <p>Sebelum masuk ke aktivitas utama, jawablah empat pertanyaan pemantik. Jawaban pemantik tidak dinilai benar atau salah.</p>
-          <a class="btn btn-primary" href="#/lkpd/pemantik">Buka Pertanyaan Pemantik</a>
+          ${icon('spark', 'icon gate-icon')}
+          <h2>Pemanasan dulu, yuk!</h2>
+          <p>Jawab 4 pertanyaan pemantik sebelum mulai aktivitas. Tidak ada jawaban salah.</p>
+          <a class="btn btn-primary btn-large" href="#/lkpd/pemantik">Buka Pemanasan</a>
         </div>`;
       return;
     }
     let html = this.sectionHeader(s);
-    if (this.submitted) html += `<p class="notice">LKPD sudah dikumpulkan pada ${esc(fmtTime(st.submittedAt))}. Jawaban hanya dapat dibaca.</p>`;
-    else if (st.locked.includes(s.id)) html += '<p class="notice">Aktivitas ini sudah diperiksa sehingga jawabannya terkunci.</p>';
+    if (this.submitted) html += `<p class="notice">LKPD sudah dikumpulkan (${esc(fmtTime(st.submittedAt))}). Jawaban hanya bisa dibaca.</p>`;
+    else if (st.locked.includes(s.id)) html += '<p class="notice">Aktivitas ini sudah diperiksa, jadi jawabannya terkunci.</p>';
     if (st.status === 'reopened') {
       const last = [...st.events].reverse().find(e => e.type === 'buka_kembali');
-      html += `<p class="notice notice-accent">Gurumu membuka kembali LKPD untuk revisi${last ? `: "${esc(last.note)}"` : ''}. Kumpulkan lagi setelah selesai.</p>`;
+      html += `<p class="notice notice-pink">Gurumu membuka LKPD lagi untuk diperbaiki${last ? `: "${esc(last.note)}"` : ''}. Kumpulkan lagi setelah selesai.</p>`;
     }
     if (s.id === 'petunjuk') html += this.identityHtml();
     if (s.figure) html += '<div class="card figure-card" data-figure></div>';
-    if (s.guide) html += `<div class="card guide"><h2>Panduan menyusun pertanyaan</h2><ul>${s.guide.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div>`;
-    if (s.items) html += `<div class="card q-card">${s.items.map(it => this.itemHtml(it, s)).join('')}</div>`;
+    if (s.guide) html += `<div class="card guide sticky-note"><span class="tape" aria-hidden="true"></span><h2>Tips membuat pertanyaan</h2><ul>${s.guide.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div>`;
+    if (s.items) html += `<div class="q-list ${s.id === 'a5' ? 'reflect' : ''}">${this.itemsHtml(s.items, s)}</div>`;
     if (s.groups) {
-      html += s.groups.map(g => `
-        <div class="card group" data-group="${g.id}">
-          <h2 class="group-title">${esc(g.title)}</h2>
-          ${g.steps ? `<div class="steps"><h3>Langkah percobaan</h3><ol>${g.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
-          ${g.sim ? `<div class="sim" data-sim="${g.sim}"></div>` : ''}
-          ${g.intro ? `<p>${esc(g.intro)}</p>` : ''}
-          ${g.given ? `<div class="given"><h3>Diketahui</h3><ul>${g.given.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-          ${g.figure ? `<div class="problem-figure" data-problem="${g.figure}"></div>` : ''}
-          <div class="q-list">${g.items.map(it => this.itemHtml(it, s)).join('')}</div>
-        </div>`).join('');
+      html += s.groups.map(g => {
+        const tag = (g.title.match(/^Soal (\d+)/) || [])[1] || (g.title.match(/^Simulasi ([AB])/) || [])[1] || '';
+        const title = g.title.replace(/^(Soal \d+|Simulasi [AB]): /, '');
+        return `
+        <section class="card group ${g.sim ? 'sim-card' : ''}" data-group="${g.id}" aria-labelledby="g-${g.id}">
+          <div class="group-head">${tag ? `<span class="group-tag" aria-hidden="true">${tag}</span>` : ''}<h2 id="g-${g.id}">${esc(g.sim ? g.title : title)}</h2></div>
+          ${g.steps ? `<div class="mission" data-mission="${g.id}"></div>` : ''}
+          <div class="group-body ${g.sim ? 'sim-inner' : ''}">
+            ${g.sim ? `<div class="sim" data-sim="${g.sim}"></div>` : ''}
+            ${g.given ? `<div class="given"><h3>Diketahui</h3><ul>${g.given.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+            ${g.figure ? `<div class="problem-figure" data-problem="${g.figure}"></div>` : ''}
+            <div class="q-list">${this.itemsHtml(g.items, s)}</div>
+          </div>
+        </section>`;
+      }).join('');
     }
     if (s.checkable) html += '<div class="card check-panel" data-check></div>';
     body.innerHTML = html;
@@ -297,6 +327,7 @@ export class Workspace {
     const fig = body.querySelector('[data-figure]');
     if (fig) observeFigure(fig, s.id);
     body.querySelectorAll('[data-problem]').forEach(n => problemFigure(n, n.dataset.problem));
+    body.querySelectorAll('[data-mission]').forEach(n => missionBar(n, s.groups.find(g => g.id === n.dataset.mission).steps));
     body.querySelectorAll('[data-sim]').forEach(n => this.mountSim(n, s));
     this.bindInputs(body, s);
     if (s.checkable) {
@@ -310,44 +341,61 @@ export class Workspace {
     const m = this.def.meta;
     return `
       <div class="card identity">
-        <h2>Identitas siswa</h2>
+        <span class="tape" aria-hidden="true"></span>
+        <span class="avatar-badge" aria-hidden="true">${icon('user')}</span>
         <dl class="kv">
           <dt>Nama</dt><dd>${esc(this.user.name)}</dd>
-          <dt>Email</dt><dd>${esc(this.user.email)}</dd>
           <dt>Kelas</dt><dd>${esc(this.user.className || '-')}</dd>
-          <dt>Mata pelajaran</dt><dd>${esc(m.subject)}, ${esc(m.grade)}</dd>
+          <dt>Email</dt><dd>${esc(this.user.email)}</dd>
+          <dt>Mapel</dt><dd>${esc(m.subject)}, ${esc(m.grade)}</dd>
         </dl>
-        <p class="muted small">Nama dan kelas diambil dari akunmu. Jika ada yang salah, sampaikan kepada gurumu.</p>
       </div>
-      <div class="card">
-        <h2>Tujuan pembelajaran</h2>
-        <ol>${m.goals.map(g => `<li>${esc(g)}</li>`).join('')}</ol>
-        <h2>Petunjuk pengerjaan</h2>
-        <ul>${m.instructions.map(g => `<li>${esc(g)}</li>`).join('')}</ul>
-      </div>`;
+      <div class="two-col">
+        <div class="card sticky-note">
+          <h2>${icon('star')} Tujuan belajar</h2>
+          <ol>${m.goals.map(g => `<li>${esc(g)}</li>`).join('')}</ol>
+        </div>
+        <div class="card">
+          <h2>${icon('book')} Petunjuk</h2>
+          <ul>${m.instructions.map(g => `<li>${esc(g)}</li>`).join('')}</ul>
+        </div>
+      </div>
+      <p class="muted small">Nama atau kelas salah? Beri tahu gurumu.</p>`;
   }
 
-  itemHtml(it, s) {
+  // Nomor pertanyaan: memakai huruf/angka dari soal (a., 1)) bila ada; butir alasan/langkah diberi ikon pensil.
+  itemsHtml(items, s) {
+    let n = 0;
+    return items.map(it => {
+      let label = it.label;
+      let num;
+      const m = label.match(/^([a-d])\.\s+(.*)$/s) || label.match(/^(\d)\)\s+(.*)$/s);
+      if (m) { num = m[1]; label = m[2]; }
+      else if (/_(alasan|langkah)$/.test(it.id) || it.type === 'simlog') num = icon(it.type === 'simlog' ? 'ruler' : 'pencil');
+      else num = String(++n);
+      return this.itemHtml({ ...it, label }, s, num);
+    }).join('');
+  }
+
+  itemHtml(it, s, num = '') {
     const v = this.state.answers[it.id];
     const locked = this.isLocked(s.id);
     const dis = locked ? 'disabled' : '';
     const fid = `f-${it.id}`;
-    const filled = isFilled(it, v);
-    const chip = it.required ? `<span class="q-chip ${filled ? 'ok' : 'no'}">${filled ? 'Sudah diisi' : fillHint(it, v)}</span>` : '<span class="q-chip opt">Tidak wajib</span>';
-    const kind = it.auto ? '<span class="q-kind">Diperiksa otomatis</span>' : it.graded === 'teacher' ? '<span class="q-kind">Dinilai guru</span>' : '';
+    const ph = esc(it.hint || '');
     let input = '';
     switch (it.type) {
       case 'text':
-        input = `<textarea id="${fid}" rows="${it.rows || 3}" maxlength="4000" ${dis}>${esc(v || '')}</textarea>`; break;
+        input = `<textarea id="${fid}" rows="${it.rows || 3}" maxlength="4000" placeholder="${ph}" ${dis}>${esc(v || '')}</textarea>`; break;
       case 'short':
-        input = `<input id="${fid}" type="text" maxlength="${it.maxLength || 60}" value="${esc(v || '')}" ${dis} class="input-short">`; break;
+        input = `<input id="${fid}" type="text" maxlength="${it.maxLength || 60}" placeholder="${ph}" value="${esc(v || '')}" ${dis} class="input-short">`; break;
       case 'number':
       case 'ratio':
-        input = `<span class="input-unit"><input id="${fid}" type="text" inputmode="${it.type === 'number' ? 'decimal' : 'text'}" maxlength="60" placeholder="${esc(it.placeholder || '')}" value="${esc(v || '')}" ${dis}>${it.unit ? `<span>${esc(it.unit)}</span>` : ''}</span>`; break;
+        input = `<span class="input-unit"><input id="${fid}" type="text" inputmode="${it.type === 'number' ? 'decimal' : 'text'}" maxlength="60" placeholder="${ph}" value="${esc(v || '')}" ${dis}>${it.unit ? `<span>${esc(it.unit)}</span>` : ''}</span>`; break;
       case 'confirm':
-        input = `<label class="check-inline"><input id="${fid}" type="checkbox" ${v ? 'checked' : ''} ${dis}> Ya</label>`; break;
+        input = `<label class="check-inline"><input id="${fid}" type="checkbox" ${v ? 'checked' : ''} ${dis}> Ya, sudah</label>`; break;
       case 'single':
-        input = `<div class="options" role="radiogroup" aria-labelledby="${fid}-l">${it.options.map(o => `<label class="opt"><input type="radio" name="${fid}" value="${esc(o.value)}" ${v === o.value ? 'checked' : ''} ${dis}> <span>${esc(o.label)}</span></label>`).join('')}</div>`; break;
+        input = `<div class="options ${it.options.length <= 2 ? 'options-row' : ''}" role="radiogroup" aria-labelledby="${fid}-l">${it.options.map(o => `<label class="opt"><input type="radio" name="${fid}" value="${esc(o.value)}" ${v === o.value ? 'checked' : ''} ${dis}> <span>${esc(o.label)}</span></label>`).join('')}</div>`; break;
       case 'multi':
         input = `<div class="options options-grid" role="group" aria-labelledby="${fid}-l">${it.options.map(o => `<label class="opt"><input type="checkbox" name="${fid}" value="${esc(o.value)}" ${Array.isArray(v) && v.includes(o.value) ? 'checked' : ''} ${dis}> <span>${esc(o.label)}</span></label>`).join('')}</div>`; break;
       case 'simlog':
@@ -357,17 +405,26 @@ export class Workspace {
     const forAttr = labelTag === 'label' ? `for="${fid}"` : '';
     return `
       <div class="q" data-item="${it.id}">
-        <div class="q-head"><${labelTag} class="q-label" id="${fid}-l" ${forAttr}>${esc(it.label)}</${labelTag}><span class="q-meta">${kind}${chip}</span></div>
-        ${input}
-        <p class="q-error" role="alert" hidden></p>
-        <div class="q-feedback" hidden></div>
-        <div class="q-grade" hidden></div>
+        <div class="q-head">
+          <span class="q-num" aria-hidden="true">${num}</span>
+          <div class="q-text">
+            <${labelTag} class="q-label" id="${fid}-l" ${forAttr}>${esc(it.label)}</${labelTag}>
+            ${it.note ? `<p class="q-note">${esc(it.note)}</p>` : ''}
+            ${this.chipHtml(it)}
+          </div>
+        </div>
+        <div class="q-body">
+          ${input}
+          <p class="q-error" role="alert" hidden></p>
+          <div class="q-feedback" hidden></div>
+          <div class="q-grade" hidden></div>
+        </div>
       </div>`;
   }
 
   simlogHtml(it, entries, locked) {
     entries = Array.isArray(entries) ? entries : [];
-    if (!entries.length) return `<p class="muted small">Belum ada catatan. Klik "Catat hasil" pada simulasi di atas (perlu ${it.minEntries} catatan).</p>`;
+    if (!entries.length) return `<p class="muted small">Belum ada catatan. Klik "Catat Hasil" di simulasi (perlu ${it.minEntries} catatan).</p>`;
     const rows = entries.map((e, i) => {
       const desc = it.sim === 'congruence'
         ? `DEF: ${fmt(e.de)}; ${fmt(e.ef)}; ${fmt(e.fd)} cm. Sudut D, E, F: ${fmt(e.aD)}°, ${fmt(e.aE)}°, ${fmt(e.aF)}°. ${[e.moved ? 'digeser' : '', `diputar ${fmt(e.rot, 0)}°`, e.mirror ? 'dicerminkan' : ''].filter(Boolean).join(', ')}`
@@ -386,7 +443,7 @@ export class Workspace {
       list.push(entry);
       this.setAnswer(logItem.id, list);
       this.rerenderSimlog(logItem, s);
-      toast(`Catatan ke-${list.length} tersimpan.`);
+      toast(`Catatan ke-${list.length} disimpan.`);
     };
     const opts = { onRecord, canRecord: () => !this.isLocked(s.id) };
     const sim = node.dataset.sim === 'congruence' ? createCongruenceSim(node, opts) : createSimilaritySim(node, opts);
@@ -439,17 +496,17 @@ export class Workspace {
     const r = this.state.reveal[s.id];
     const mode = this.state.feedbackMode;
     let reason = '';
-    if (sp.missing.length && !r.checked && !this.submitted) reason = `Lengkapi ${sp.missing.length} pertanyaan wajib lagi pada aktivitas ini sebelum memeriksa jawaban.`;
+    if (sp.missing.length && !r.checked && !this.submitted) reason = `Isi dulu ${sp.missing.length} pertanyaan lagi di aktivitas ini.`;
     else if (r.allowed || (mode === 'sebelum' && !this.submitted)) reason = '';
     else if (!this.submitted) reason = mode === 'setelah_semua'
-      ? 'Gurumu mengatur jawaban benar dan pembahasan baru dibuka setelah seluruh siswa di kelasmu mengumpulkan LKPD.'
-      : 'Gurumu mengatur jawaban benar dan pembahasan baru dapat dilihat setelah LKPD dikumpulkan.';
+      ? 'Pembahasan dibuka gurumu setelah semua teman sekelas mengumpulkan.'
+      : 'Pembahasan bisa dilihat setelah kamu mengumpulkan LKPD.';
     else reason = r.reason || 'Pemeriksaan belum tersedia.';
     const can = !reason;
     panel.innerHTML = `
-      <h2>Periksa jawaban</h2>
-      <p class="muted">Pemeriksaan otomatis hanya untuk soal yang memiliki kunci (pilihan, isian bilangan, dan perbandingan). Jawaban uraian dinilai oleh gurumu.</p>
-      ${mode === 'sebelum' && !r.checked && !this.submitted ? '<p class="notice notice-accent">Setelah kamu memeriksa jawaban, seluruh jawaban pada aktivitas ini terkunci dan tidak dapat diubah.</p>' : ''}
+      <h2>${icon('check')} Cek jawabanmu</h2>
+      <p>Yang dicek otomatis hanya pilihan dan isian angka. Jawaban uraian dinilai gurumu.</p>
+      ${mode === 'sebelum' && !r.checked && !this.submitted ? '<p class="notice notice-pink">Setelah dicek, jawaban di aktivitas ini terkunci.</p>' : ''}
       <div class="check-actions">
         <button type="button" class="btn btn-primary" data-run-check ${can ? '' : 'aria-disabled="true"'}>Periksa Jawaban</button>
         <button type="button" class="btn" data-show-key ${this.feedback[s.id] ? '' : 'aria-disabled="true"'}>Lihat Pembahasan</button>
@@ -461,7 +518,7 @@ export class Workspace {
       this.runCheck(s, false);
     });
     panel.querySelector('[data-show-key]').addEventListener('click', () => {
-      if (!this.feedback[s.id]) { panel.querySelector('.check-reason').textContent = 'Pembahasan tersedia setelah kamu memeriksa jawaban.'; return; }
+      if (!this.feedback[s.id]) { panel.querySelector('.check-reason').textContent = 'Cek jawaban dulu, baru pembahasannya muncul.'; return; }
       this.showFeedback(s, true);
     });
     if (this.feedback[s.id]) this.showFeedback(s, this.keyShown?.[s.id]);
@@ -488,9 +545,9 @@ export class Workspace {
     let confirmLock = false;
     if (!silent && this.state.feedbackMode === 'sebelum' && !r.checked && !this.submitted) {
       confirmLock = await confirmDialog({
-        title: 'Periksa jawaban sekarang?',
-        body: '<p>Setelah diperiksa, semua jawaban pada aktivitas ini <strong>terkunci</strong> dan tidak dapat diubah. Pastikan kamu sudah yakin.</p>',
-        ok: 'Ya, periksa dan kunci'
+        title: 'Cek jawaban sekarang?',
+        body: '<p>Setelah dicek, jawaban di aktivitas ini <strong>terkunci</strong>. Sudah yakin?</p>',
+        ok: 'Ya, cek sekarang'
       });
       if (!confirmLock) return;
     }
@@ -500,7 +557,7 @@ export class Workspace {
       if (!silent) {
         await this.load();
         this.render(document.getElementById('view'), s.id);
-        toast(`Skor otomatis aktivitas ini: ${res.score} dari ${res.max}.`);
+        toast(`Skor otomatis: ${res.score} dari ${res.max}.`);
       } else {
         this.renderCheckPanel(s);
       }
@@ -517,13 +574,13 @@ export class Workspace {
     for (const row of res.items) {
       const box = document.querySelector(`[data-item="${row.id}"] .q-feedback`);
       if (!box) continue;
-      const verdict = row.unreadable ? 'Jawaban tidak dapat dibaca sebagai bilangan atau perbandingan' : row.correct ? 'Benar' : 'Belum tepat';
-      box.innerHTML = `<p class="fb ${row.correct ? 'fb-ok' : 'fb-no'}"><strong>${verdict}</strong> (${row.correct ? row.points : 0}/${row.points})</p>
-        ${withKey ? `<p class="fb-key"><strong>Jawaban yang diharapkan:</strong> ${esc(row.answer)}</p><p class="fb-key">${esc(row.explain)}</p>` : ''}`;
+      const verdict = row.unreadable ? 'Jawaban tidak terbaca sebagai angka' : row.correct ? 'Benar' : 'Belum tepat';
+      box.innerHTML = `<p class="fb ${row.correct ? 'fb-ok' : 'fb-no'}">${verdict} (${row.correct ? row.points : 0}/${row.points})</p>
+        ${withKey ? `<p class="fb-key"><strong>Jawaban:</strong> ${esc(row.answer)}</p><p class="fb-key">${esc(row.explain)}</p>` : ''}`;
       box.hidden = false;
     }
     const result = document.querySelector('[data-check] .check-result');
-    if (result) result.innerHTML = `<p class="score-line">Skor otomatis: <strong>${res.score}</strong> dari ${res.max}.${withKey ? '' : ' Klik "Lihat Pembahasan" untuk melihat penjelasannya.'}</p>`;
+    if (result) result.innerHTML = `<p class="score-line">Skor otomatis: ${res.score} dari ${res.max}.${withKey ? '' : ' Klik "Lihat Pembahasan" untuk penjelasannya.'}</p>`;
     const keyBtn = document.querySelector('[data-show-key]');
     if (keyBtn) keyBtn.removeAttribute('aria-disabled');
   }
@@ -536,7 +593,7 @@ export class Workspace {
       if (!gr) continue;
       const box = body.querySelector(`[data-item="${it.id}"] .q-grade`);
       if (!box) continue;
-      box.innerHTML = `${typeof gr.score === 'number' ? `<p><strong>Skor dari guru:</strong> ${fmt(gr.score)} dari ${it.points}</p>` : ''}${gr.comment ? `<p><strong>Umpan balik guru:</strong> ${esc(gr.comment)}</p>` : ''}`;
+      box.innerHTML = `${typeof gr.score === 'number' ? `<p><strong>Skor dari guru:</strong> ${fmt(gr.score)} dari ${it.points}</p>` : ''}${gr.comment ? `<p><strong>Pesan guru:</strong> ${esc(gr.comment)}</p>` : ''}`;
       box.hidden = false;
     }
   }
@@ -547,60 +604,60 @@ export class Workspace {
     const st = this.state;
     const p = this.localProgress();
     const complete = p.filled === p.total;
-    const rows = this.def.sections.map(s => {
+    const cards = this.def.sections.map(s => {
       const b = this.sectionBadge(s, p);
-      const sp = p.sections[s.id];
-      return `<tr><th scope="row"><a href="#/lkpd/${s.id}">${esc(s.nav)}: ${esc(s.title)}</a></th><td>${sp.filled}/${sp.required}</td><td><span class="toc-state ${b.cls}">${esc(b.text)}</span></td></tr>`;
+      return `<li data-accent="${s.accent}"><a href="#/lkpd/${s.id}">${statusIcon(b.cls)}<span class="toc-text"><b>${esc(s.step ? `${s.step}. ${s.title}` : s.nav)}</b><span class="toc-state">${esc(b.text)}</span></span></a></li>`;
     }).join('');
     const missing = this.def.sections.filter(s => p.sections[s.id].missing.length).map(s => `
-      <li><a href="#/lkpd/${s.id}">${esc(s.nav)}: ${esc(s.title)}</a>
+      <li><a href="#/lkpd/${s.id}">${esc(s.step ? `${s.step}. ${s.title}` : s.nav)}</a>
         <ul>${p.sections[s.id].missing.map(it => `<li>${esc(it.label)} <span class="muted">(${esc(fillHint(it, st.answers[it.id]))})</span></li>`).join('')}</ul></li>`).join('');
 
     let action;
     if (this.submitted) {
       action = `
         <div class="card done-card">
-          <h2>LKPD berhasil dikumpulkan</h2>
+          <span class="tape" aria-hidden="true"></span>
+          <h2>${icon('star')} LKPD-mu sudah terkumpul!</h2>
           <dl class="kv">
-            <dt>Waktu pengumpulan</dt><dd>${esc(fmtTime(st.submittedAt, { dateStyle: 'long', timeStyle: 'short' }))}</dd>
-            <dt>Status</dt><dd>${st.grading.status === 'selesai' ? 'Sudah dinilai guru' : 'Dikumpulkan, menunggu penilaian guru'}</dd>
+            <dt>Waktu kumpul</dt><dd>${esc(fmtTime(st.submittedAt, { dateStyle: 'long', timeStyle: 'short' }))}</dd>
+            <dt>Status</dt><dd>${st.grading.status === 'selesai' ? 'Sudah dinilai guru' : 'Menunggu dinilai guru'}</dd>
             ${st.score ? `<dt>Skor otomatis</dt><dd>${st.score.auto} dari ${st.score.autoMax}</dd>` : ''}
-            ${st.score && st.score.final !== null ? `<dt>Skor uraian dari guru</dt><dd>${fmt(st.score.manual)} dari ${st.score.manualMax}</dd><dt>Nilai akhir</dt><dd><strong>${fmt(st.score.final)}</strong></dd>` : ''}
+            ${st.score && st.score.final !== null ? `<dt>Skor uraian</dt><dd>${fmt(st.score.manual)} dari ${st.score.manualMax}</dd><dt>Nilai akhir</dt><dd>${fmt(st.score.final)}</dd>` : ''}
           </dl>
-          ${st.grading.status === 'selesai' && st.grading.note ? `<p><strong>Catatan guru:</strong> ${esc(st.grading.note)}</p>` : ''}
-          <button type="button" class="btn btn-primary" data-pdf>Unduh LKPD (PDF)</button>
+          ${st.grading.status === 'selesai' && st.grading.note ? `<p><strong>Pesan guru:</strong> ${esc(st.grading.note)}</p>` : ''}
+          <button type="button" class="btn btn-primary btn-large" data-pdf>${icon('download')} Unduh LKPD (PDF)</button>
         </div>`;
     } else {
       action = `
         <div class="card submit-card">
           <h2>Kumpulkan LKPD</h2>
           ${complete
-            ? '<p>Semua pertanyaan wajib sudah terisi. Periksa kembali jawabanmu sebelum mengumpulkan. Setelah dikumpulkan, jawaban tidak dapat diubah lagi.</p>'
-            : `<p class="notice">Masih ada ${p.total - p.filled} pertanyaan wajib yang belum diisi. Tombol Kumpulkan LKPD aktif setelah semuanya terisi.</p>`}
+            ? '<p>Semua pertanyaan wajib sudah terisi. Cek sekali lagi, lalu kumpulkan. Setelah dikumpulkan, jawaban tidak bisa diubah.</p>'
+            : `<p class="notice">Masih ada ${p.total - p.filled} pertanyaan yang belum diisi. Tombol aktif setelah semuanya terisi.</p>`}
           <button type="button" class="btn btn-primary btn-large" data-submit ${complete ? '' : 'aria-disabled="true"'}>Kumpulkan LKPD</button>
           <div class="submit-msg" role="alert"></div>
-          ${missing ? `<div class="missing"><h3>Pertanyaan yang belum diisi</h3><ul>${missing}</ul></div>` : ''}
+          ${missing ? `<div class="missing"><h3>Belum diisi</h3><ul>${missing}</ul></div>` : ''}
         </div>`;
     }
 
     body.innerHTML = `
       <header class="section-head">
-        <h1 id="section-title" tabindex="-1">Ringkasan Pengerjaan</h1>
-        <p class="lead">Periksa status setiap bagian sebelum mengumpulkan LKPD.</p>
+        <span class="section-badge" aria-hidden="true">${icon('flag')}</span>
+        <div><span class="section-kicker">Langkah terakhir</span><h1 id="section-title" tabindex="-1">Ringkasan</h1></div>
+        <p class="lead">Lihat bagian mana yang sudah selesai, lalu kumpulkan.</p>
+        ${deco.star('#fff')}
       </header>
       ${action}
       <div class="card">
-        <table class="data-table">
-          <caption>Status setiap bagian</caption>
-          <thead><tr><th scope="col">Bagian</th><th scope="col">Terisi</th><th scope="col">Status</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <h2>Status tiap bagian</h2>
+        <ul class="summary-list">${cards}</ul>
       </div>`;
 
     body.querySelector('[data-pdf]')?.addEventListener('click', async e => {
-      e.target.disabled = true;
+      const b = e.currentTarget;
+      b.disabled = true;
       try { await download('/api/submission/pdf'); } catch (err) { toast(err.message, 'error'); }
-      e.target.disabled = false;
+      b.disabled = false;
     });
     const btn = body.querySelector('[data-submit]');
     btn?.addEventListener('click', () => this.submit(btn, body));
@@ -610,7 +667,7 @@ export class Workspace {
     const msg = body.querySelector('.submit-msg');
     const p = this.localProgress();
     if (p.filled < p.total) {
-      msg.innerHTML = `<p class="form-error">LKPD belum dapat dikumpulkan. Masih ada ${p.total - p.filled} pertanyaan wajib yang belum diisi. Lihat daftar di bawah.</p>`;
+      msg.innerHTML = `<p class="form-error">Belum bisa dikumpulkan. Masih ada ${p.total - p.filled} pertanyaan yang belum diisi. Lihat daftarnya di bawah.</p>`;
       body.querySelector('.missing')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
@@ -618,8 +675,8 @@ export class Workspace {
     const saved = await this.flush();
     if (!saved) { msg.innerHTML = '<p class="form-error">Jawaban terakhir belum tersimpan di server. Periksa koneksi, lalu coba lagi.</p>'; return; }
     const ok = await confirmDialog({
-      title: 'Kumpulkan LKPD sekarang?',
-      body: `<p>Kamu akan mengumpulkan LKPD atas nama <strong>${esc(this.user.name)}</strong> (${esc(this.user.className || '-')}).</p><p>Setelah dikumpulkan, jawaban tidak dapat diubah kecuali gurumu membukanya kembali.</p>`,
+      title: 'Kumpulkan sekarang?',
+      body: `<p>LKPD atas nama <strong>${esc(this.user.name)}</strong> (${esc(this.user.className || '-')}).</p><p>Setelah dikumpulkan, jawaban tidak bisa diubah lagi kecuali gurumu membukanya.</p>`,
       ok: 'Ya, kumpulkan'
     });
     if (!ok) return;

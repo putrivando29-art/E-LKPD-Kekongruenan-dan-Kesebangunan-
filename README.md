@@ -1,76 +1,99 @@
 # E-LKPD Kekongruenan dan Kesebangunan
 
-Lembar Kerja Peserta Didik elektronik untuk Matematika kelas VIII SMP, materi kekongruenan dan kesebangunan. Disusun oleh Kelompok 8 PKD.
+Lembar Kerja Peserta Didik elektronik untuk Matematika kelas VIII SMP, materi kekongruenan dan kesebangunan. Disusun oleh KELOMPOK 8.
 
-Website ini memiliki server sendiri (Node.js) dan database (SQLite). Login, penyimpanan jawaban, validasi, kunci jawaban, penilaian, dan pembuatan PDF semuanya berjalan di server, bukan hanya tampilan.
+Website ini punya server (Node.js, Express) dan database. Login, penyimpanan jawaban, validasi, kunci jawaban, penilaian, dan PDF semuanya diproses di server.
+
+- Di **Vercel**: server berjalan sebagai Vercel Function (`api/index.js`), database memakai **PostgreSQL**, misalnya Supabase.
+- Di **komputer sendiri**: `npm start`. Tanpa `DATABASE_URL`, data disimpan di SQLite (`data/elkpd.sqlite`).
+
+## Kenapa versi pertama error 404 di Vercel
+
+Vercel hanya menyajikan berkas statis dari folder `public/`. Server Node.js tidak dijalankan, sehingga semua alamat `/api/...` dibalas 404. Versi ini menambahkan `api/index.js` dan `vercel.json` agar Vercel menjalankan server sebagai Function. SQLite juga tidak bisa dipakai di Vercel karena disk Function tidak menyimpan data secara permanen, jadi data dipindahkan ke PostgreSQL.
+
+## Memasang di Vercel dengan Supabase
+
+1. **Buat database.** Buat proyek baru di https://supabase.com. Catat kata sandi database yang Anda buat.
+2. **Ambil connection string.** Di dasbor Supabase, klik **Connect**, lalu pilih **Transaction pooler** (port `6543`). Mode ini disarankan Supabase untuk fungsi serverless. Ganti `[YOUR-PASSWORD]` dengan kata sandi database. Rujukan: https://supabase.com/docs/guides/database/connecting-to-postgres
+3. **Isi Environment Variables di Vercel.** Buka proyek di Vercel, lalu **Settings > Environment Variables**:
+
+   | Nama | Isi |
+   |---|---|
+   | `DATABASE_URL` | connection string dari langkah 2 |
+   | `KODE_AKSES_GURU` | kode rahasia pendaftaran guru, minimal 8 karakter. Jangan dibagikan ke siswa. |
+   | `DATABASE_CA_CERT` (tidak wajib) | isi sertifikat CA Supabase, agar sertifikat server diverifikasi |
+
+4. **Deploy ulang.** Perubahan Environment Variables baru berlaku pada deployment berikutnya: buka **Deployments**, lalu pilih **Redeploy** pada deployment terbaru, atau push commit baru.
+5. **Daftarkan guru pertama.** Buka website, klik **Masuk sebagai Guru > Daftar pakai kode akses guru**, lalu isi kode dari `KODE_AKSES_GURU`. Tabel database dibuat otomatis saat permintaan pertama.
+6. **Buat kelas.** Di Dasbor Guru, buat kelas, lalu bagikan **kode kelas** kepada siswa. Siswa mendaftar sendiri dengan kode itu.
+7. **Guru berikutnya** sebaiknya memakai **kode undangan** (Dasbor Guru > Undang guru lain). Setelah semua guru terdaftar, `KODE_AKSES_GURU` boleh dihapus atau diganti di Vercel.
+
+Jika `DATABASE_URL` belum diisi, website menampilkan pesan "Server belum terhubung ke database", bukan halaman kosong.
+
+Tentang SSL: tanpa `DATABASE_CA_CERT`, koneksi ke Supabase tetap terenkripsi, tetapi sertifikat server tidak diverifikasi. Mengisi `DATABASE_CA_CERT` menutup celah itu. Letak tombol unduh sertifikat di dasbor Supabase belum saya pastikan; cek pengaturan Database atau SSL di proyek Anda.
+
+## Keamanan akun guru
+
+- Tidak ada pendaftaran guru terbuka. Akun guru hanya bisa dibuat dengan:
+  - **kode akses guru** dari `KODE_AKSES_GURU` di server, atau
+  - **kode undangan sekali pakai** yang dibuat guru terdaftar (berlaku 7 hari, bisa dibatalkan), atau
+  - perintah `npm run buat-guru` oleh pengelola yang memegang `DATABASE_URL`.
+- Kode diperiksa di server. Kode akses tidak ada di kode frontend. Kode undangan hanya disimpan sebagai hash.
+- 5 kode salah dalam 15 menit dari alamat IP yang sama membuat percobaan berikutnya ditahan, walaupun kodenya benar. Login dibatasi 10 kegagalan per 15 menit per IP dan email. Catatan percobaan disimpan di database, jadi tetap berlaku di semua instance Vercel.
+- Setelah kode valid, guru tetap masuk dengan email dan kata sandi (hash scrypt).
+- Peran pengguna dibaca dari database pada setiap permintaan. Tombol "Masuk sebagai Guru" tidak memberi hak apa pun.
+- Siswa yang membuka alamat guru diarahkan kembali ke LKPD. Semua endpoint guru membalas 403 untuk akun siswa.
+- Guru hanya melihat siswa di kelas miliknya; siswa kelas lain dibalas "tidak ditemukan".
+- Sesi berupa token acak di cookie `HttpOnly`, `SameSite=Lax`, dan `Secure` di Vercel. Sesi berlaku 7 hari dan bisa diakhiri dengan Keluar atau "Keluar dari semua perangkat".
+- **Row Level Security (RLS)** aktif di semua tabel PostgreSQL tanpa kebijakan apa pun, dan hak peran `anon` serta `authenticated` dicabut. Akibatnya API publik Supabase (misalnya dengan anon key) tidak bisa membaca atau menulis data. Semua akses lewat server. Website ini **tidak memakai Supabase Auth**: autentikasi dibuat di server sendiri, dan Supabase dipakai sebagai database PostgreSQL saja.
 
 ## Isi LKPD
 
 | Bagian | Isi | Penilaian |
 |---|---|---|
-| Petunjuk | Identitas dari akun, nomor absen, tujuan, petunjuk | Tidak dinilai |
-| Pemantik | 4 pertanyaan pemantik | Tidak dinilai, guru memberi umpan balik |
-| Aktivitas 1: Mengamati | Bangun A, B, C, D pada petak 1 cm, alat perbesar tampilan, ukuran, putar dan tumpuk | 2 butir otomatis, 3 uraian dinilai guru |
-| Aktivitas 2: Menanya | Pertanyaan buatan siswa dengan panduan | Dinilai guru |
-| Aktivitas 3: Mencoba | Simulasi A (kongruen) dan Simulasi B (sebangun), catatan percobaan minimal 2 per simulasi | 5 butir otomatis, sisanya dinilai guru |
-| Latihan | 7 soal bertahap: kongruen s.s.s, perbandingan dan faktor skala, mengenali bangun, benar atau salah, panjang sisi, besar sudut, soal kontekstual | Otomatis untuk jawaban pasti, langkah dan alasan dinilai guru |
-| Aktivitas 4: Menalar | 5 pernyataan yang dilengkapi siswa | Dinilai guru dengan rubrik |
-| Aktivitas 5: Refleksi | 4 pertanyaan refleksi | Tidak dinilai, guru memberi umpan balik |
-| Ringkasan | Status setiap bagian, daftar yang belum diisi, Kumpulkan LKPD, unduh PDF | |
+| Kenalan dulu | Identitas dari akun, nomor absen, tujuan, petunjuk | Tidak dinilai |
+| Pemanasan | 4 pertanyaan pemantik (wajib sebelum aktivitas) | Umpan balik guru saja |
+| 1. Mengamati | Bangun A, B, C, D pada kotak 1 cm, perbesar tampilan, ukuran, tumpuk | 2 otomatis, 3 dinilai guru |
+| 2. Menanya | Pertanyaan buatan siswa dengan tips | Dinilai guru |
+| 3. Mencoba | Simulasi A (kongruen) dan B (sebangun), misi bertahap, minimal 2 catatan | 5 otomatis, sisanya dinilai guru |
+| Latihan | 7 soal bertahap | Otomatis untuk jawaban pasti, langkah dan alasan dinilai guru |
+| 4. Menalar | 5 kalimat yang dilengkapi siswa | Dinilai guru dengan rubrik |
+| 5. Refleksi | 4 pertanyaan | Umpan balik guru saja |
+| Ringkasan | Status tiap bagian, Kumpulkan LKPD, unduh PDF | |
 
-Ukuran bangun Aktivitas 1 (petak 1 cm): A segitiga siku-siku 3, 4, 5 cm; B segitiga sama kaki dengan alas 4 cm dan tinggi 3 cm; C adalah A diperbesar 1,5 kali; D kongruen dengan A. Keempat bangun diberi warna yang sama agar warna tidak membocorkan pasangan.
+Ukuran bangun Aktivitas 1: A segitiga siku-siku 3, 4, 5 cm; B segitiga sama kaki dengan alas 4 cm dan tinggi 3 cm; C adalah A diperbesar 1,5 kali; D kongruen dengan A. Keempatnya berwarna sama agar warna tidak membocorkan jawaban.
 
-### Simulasi
-
-- **Simulasi A**: ABC tetap (AB = 5, BC = 7, CA = 8 cm). DEF dapat digeser dengan mouse atau sentuhan, diputar lewat gagang, dicerminkan, diimpitkan ke ABC, dan diubah panjang sisinya (dengan pemeriksaan ketaksamaan segitiga). Panjang sisi dan besar sudut dihitung ulang dari koordinat hasil transformasi, lalu dibandingkan per pasangan A ke D, B ke E, C ke F.
-- **Simulasi B**: PQR tetap (3, 4, 5 cm). STU dapat diatur dengan faktor skala k (0,5 sampai 3) atau sisi satu per satu. Tabel menampilkan hasil bagi sisi bersesuaian dan besar sudut, serta keterangan apakah sudut sama dan perbandingan tetap.
-- Papan ketik: pilih segitiga lalu tekan tombol panah. Tombol "Atur Ulang Simulasi" tersedia di kedua simulasi.
+Simulasi menghitung panjang sisi dan sudut dari koordinat setelah digeser, diputar, atau dicerminkan. Animasi hanya untuk gambar; tabel ukuran selalu memakai keadaan akhir. Di layar di bawah 560 px, bidang simulasi disusun tegak agar label tetap terbaca.
 
 ## Aturan pengisian dan pemeriksaan
 
-- Uraian dianggap terisi jika memuat minimal 3 huruf atau angka. Spasi atau tanda baca saja tidak dihitung. Isian bilangan dan perbandingan harus dapat dibaca sebagai bilangan.
-- Server memeriksa ulang semua kolom wajib saat pengumpulan dan mengembalikan daftar pertanyaan yang belum diisi.
-- Jawaban disimpan otomatis 1 detik setelah siswa berhenti mengetik, saat pindah bagian, dan saat halaman ditutup. Jika koneksi terputus, perubahan disimpan di `localStorage` perangkat dan dikirim ulang otomatis.
-- Pengumpulan memerlukan konfirmasi dan dicegah ganda di server (pembaruan bersyarat). Setelah dikumpulkan, jawaban tidak dapat diubah.
-- Guru dapat membuka kembali LKPD dengan alasan wajib. Pembukaan tercatat di riwayat dan terlihat oleh siswa. Aktivitas yang kuncinya sudah dilihat siswa tetap terkunci, kecuali guru memilih membukanya juga.
-- **Kunci jawaban dan pembahasan hanya ada di `server/keys.js`** dan hanya dikirim setelah server memastikan syaratnya terpenuhi. Guru memilih per kelas kapan siswa boleh melihatnya:
-  - *Sebelum pengumpulan*: setelah semua pertanyaan wajib aktivitas itu terisi. Setelah diperiksa, aktivitas itu terkunci agar siswa tidak bisa mencoba-coba jawaban.
-  - *Setelah siswa mengumpulkan* (bawaan).
-  - *Setelah seluruh kelas mengumpulkan*.
-- Pemeriksaan otomatis menerima bentuk setara: `1 : 2`, `3:6`, `1/2`, `0,5`, `1 banding 2`; `6 cm`, `6,0`, `12/2`; `60°`, `60 derajat`.
-- Skor dan komentar guru baru terlihat siswa setelah guru menandai penilaian selesai.
+- Uraian dianggap terisi jika memuat minimal 3 huruf atau angka. Spasi atau tanda baca saja tidak dihitung.
+- Server memeriksa ulang semua kolom wajib saat pengumpulan dan mengembalikan daftar yang belum diisi.
+- Jawaban tersimpan otomatis 1 detik setelah berhenti mengetik. Saat internet putus, perubahan disimpan di perangkat dan dikirim ulang otomatis.
+- Pengumpulan butuh konfirmasi dan tidak bisa terjadi dua kali. Setelah dikumpulkan, jawaban terkunci.
+- Guru bisa membuka kembali LKPD dengan alasan yang tercatat.
+- Kunci dan pembahasan hanya ada di `server/keys.js`. Guru memilih per kelas kapan siswa bisa melihatnya: sebelum mengumpulkan (aktivitas lalu terkunci), setelah mengumpulkan, atau setelah seluruh kelas mengumpulkan.
+- Bentuk setara diterima: `1 : 2`, `3:6`, `1/2`, `0,5`, `1 banding 2`; `6 cm`, `12/2`; `60°`.
 
-## Menjalankan
+## Menjalankan di komputer sendiri
 
-Kebutuhan: Node.js 22.5 atau lebih baru (memakai modul bawaan `node:sqlite`).
+Kebutuhan: Node.js 22.
 
 ```bash
 npm install
 ```
 
 ```bash
+KODE_AKSES_GURU=kode-rahasia-anda npm start
+```
+
+Buka `http://localhost:3000`. Akun guru juga bisa dibuat lewat terminal:
+
+```bash
 npm run buat-guru -- --email guru@sekolah.sch.id --nama "Nama Guru" --kelas "VIII A"
 ```
 
-Perintah di atas menanyakan kata sandi guru dan mencetak **kode kelas**. Siswa mendaftar sendiri di website dengan kode kelas itu. Akun guru tidak dapat dibuat dari website.
-
-```bash
-npm start
-```
-
-Buka `http://localhost:3000`. Guru dapat membuat kelas tambahan dari Dasbor Guru.
-
-### Variabel lingkungan
-
-| Nama | Bawaan | Fungsi |
-|---|---|---|
-| `PORT` | `3000` | Port server |
-| `DB_FILE` | `data/elkpd.sqlite` | Lokasi berkas database |
-| `COOKIE_SECURE` | kosong | Isi `1` bila situs dibuka lewat HTTPS |
-| `TRUST_PROXY` | kosong | Isi `1` bila server berada di belakang reverse proxy |
-| `ZONA_WAKTU`, `LABEL_ZONA_WAKTU` | `Asia/Jakarta`, `WIB` | Zona waktu pada PDF |
-
-Tidak ada kunci rahasia di kode frontend. Sesi disimpan sebagai token acak di cookie `HttpOnly`, kata sandi di-hash dengan scrypt.
+Untuk memakai database Supabase dari komputer sendiri, isi `DATABASE_URL` sebelum perintah di atas.
 
 ## Pengujian
 
@@ -78,71 +101,73 @@ Tidak ada kunci rahasia di kode frontend. Sesi disimpan sebagai token acak di co
 npm test
 ```
 
-21 uji otomatis (`test/api.test.js`, `test/grading.test.js`) memeriksa: pendaftaran dan validasinya, pembatasan akses siswa dan guru (termasuk guru lain), penyimpanan progres, kolom berisi spasi, pengumpulan yang belum lengkap, pengumpulan ganda serentak, penguncian setelah pengumpulan, ketiga mode pembahasan, bentuk jawaban setara, penilaian guru, pembukaan kembali, unduhan PDF dan CSV, serta atur ulang kata sandi.
-
-Uji antarmuka di browser (butuh Playwright dan Chromium) terhadap server yang sedang berjalan:
-
 ```bash
-node test/ui-flow.js http://localhost:3000 KODEKELAS guru@sekolah.sch.id sandiguru folder-hasil
+npm run test:pg
 ```
 
-Skrip ini menjalankan alur siswa (daftar, pemantik, muat ulang, mode luring, Aktivitas 1, simulasi dengan seret mouse, kumpul saat belum lengkap, konfirmasi, unduh PDF, pembahasan), alur guru (dasbor, unduh PDF, penilaian, buka kembali), dan tampilan HP 375 px dengan seret sentuh, sambil memeriksa galat konsol dan luapan horizontal.
+`npm test` menjalankan 24 uji dengan SQLite. `npm run test:pg` menjalankan 24 uji yang sama dengan PostgreSQL (butuh server Postgres lokal; atur `TEST_DATABASE_URL`). Yang diuji antara lain:
 
-## Deploy
+- pendaftaran guru tanpa kode, dengan kode salah, kode benar, undangan dipakai ulang, dan undangan dibatalkan;
+- batas 5 kode salah;
+- siswa memanggil endpoint guru (403), dan guru lain membuka siswa kelas ini (404);
+- kolom berisi spasi dan pengumpulan yang belum lengkap;
+- pengumpulan ganda yang dikirim bersamaan;
+- ketiga mode pembahasan, penilaian, pembukaan kembali, PDF, CSV, dan keluar dari semua perangkat.
 
-Website ini **tidak bisa** dipasang di hosting statis (Netlify Drop, GitHub Pages, Vercel statis), karena membutuhkan server Node.js yang terus berjalan dan penyimpanan berkas yang tidak terhapus saat server dimulai ulang. Pilihan yang sesuai:
+Uji di browser (Playwright dan Chromium), terhadap server yang sedang berjalan dengan `KODE_AKSES_GURU` yang sama:
 
-- Komputer atau server sekolah di jaringan lokal: jalankan `npm start`, siswa membuka `http://alamat-ip:3000`.
-- VPS atau layanan hosting Node.js yang menyediakan disk persisten. Arahkan `DB_FILE` ke disk persisten, aktifkan HTTPS, lalu set `COOKIE_SECURE=1` dan `TRUST_PROXY=1`.
+```bash
+KODE_AKSES_GURU=kode-rahasia-anda node test/ui-flow.js http://localhost:3000 folder-hasil
+```
 
-Jika hosting tidak menyediakan disk persisten, data akan hilang saat server dimulai ulang. Untuk kasus itu, lapisan `server/db.js` perlu diganti ke database terkelola (misalnya PostgreSQL). Penggantian ini belum dibuat.
+## Desain
 
-Cadangkan database dengan menyalin berkas `DB_FILE` saat server berhenti.
+Arah visual dari pemilik: ceria, lembut, bergaya stiker, untuk siswa kelas VIII.
+
+- Palet: cream `#FFF8EF`, peach `#F6C6AD`, coral `#E98B73`, butter `#F5DF91`, dusty pink `#E8B7C5`, lilac `#C9BCE5`, cokelat `#493B37`, putih.
+- Setiap aktivitas punya aksen sendiri: Mengamati peach, Menanya pink, Mencoba butter, Menalar lilac, Refleksi cream dengan hiasan.
+- Kontras dihitung dengan rumus WCAG. Teks putih di atas coral hanya 2,5 : 1 dan `#493B37` di atas coral 4,3 : 1, keduanya gagal untuk teks biasa. Karena itu teks tombol coral memakai cokelat lebih gelap `#2E2422` (6,0 : 1), dan teks aksen memakai coral tua `#A4503B` (5,3 : 1 di atas cream).
+- Huruf: Nunito (SIL Open Font License) untuk judul dan isi. PDF memakai DejaVu Sans karena memuat simbol °, ∠, dan ≅.
+- Ilustrasi dan ikon digambar sendiri dalam satu gaya (`public/js/art.js`): garis cokelat berujung bulat, isian pastel solid, tepi putih seperti stiker. Tidak ada gambar dari luar.
+- Kotak 1 cm dan penggaris pada simulasi adalah alat ukur, bukan hiasan.
 
 ## Yang belum tersedia
 
-- Berkas PDF LKPD asli tidak ada di sesi pembuatan. Isi dan urutan mengikuti spesifikasi tertulis. Warna memakai hijau tua `#1F5C4F` dan jingga bata `#B5541C` sebagai dugaan; semua warna diatur di bagian `:root` pada `public/css/style.css` dan `server/pdf.js` sehingga mudah disamakan dengan PDF asli.
-- Belum ada reset kata sandi lewat email. Guru mengatur ulang kata sandi siswa dari Dasbor Guru dan mendapat kata sandi sementara.
-- Satu akun siswa mengerjakan satu LKPD dan terdaftar di satu kelas.
-- Pembatas percobaan masuk disimpan di memori server dan hilang saat server dimulai ulang.
-- Pada Node.js 22, `node:sqlite` masih berlabel eksperimental. Skrip `npm start` menyembunyikan peringatannya.
+- Website versi ini belum saya deploy sendiri ke Vercel (saya tidak punya akses ke akun Vercel atau Supabase Anda). Function, rewrite, dan PostgreSQL sudah diuji di lingkungan lokal yang meniru alur itu.
+- Belum ada reset kata sandi lewat email. Guru mengatur ulang kata sandi siswa dari dasbor.
+- Satu akun siswa mengerjakan satu LKPD di satu kelas.
+- PDF LKPD asli dari kelompok tidak pernah saya terima. Isi mengikuti spesifikasi tertulis.
 
 ## Struktur
 
 ```
-server/index.js     titik masuk server
-server/app.js       rute API, hak akses, pengumpulan, pembahasan, penilaian
+api/index.js        titik masuk Vercel Function
+vercel.json         rewrite /api/* ke Function, berkas font ikut dibundel
+server/app.js       rute API, hak akses, pengumpulan, pembahasan, penilaian, undangan guru
+server/db.js        PostgreSQL (DATABASE_URL) atau SQLite, skema, penguncian RLS
+server/auth.js      hash kata sandi, sesi, pembatas percobaan
 server/lkpd.js      isi LKPD yang boleh dilihat siswa
 server/keys.js      kunci jawaban, pembahasan, rubrik (hanya server)
 server/grading.js   validasi isian, pengurai bilangan dan perbandingan, skor
-server/pdf.js       PDF dari data tersimpan (PDFKit, huruf DejaVu Sans)
-server/db.js        skema dan akses SQLite
-server/auth.js      hash kata sandi, sesi, pembatas percobaan masuk
-scripts/buat-guru.js  membuat akun guru dan kelas
-public/             halaman, CSS, JavaScript, huruf Atkinson Hyperlegible
+server/pdf.js       PDF dari data tersimpan
+server/index.js     menjalankan server di komputer sendiri
+scripts/buat-guru.js  membuat akun guru dan kelas dari terminal
+public/             halaman, CSS, JavaScript, huruf Nunito
 test/               uji API, uji penilaian, uji browser
 ```
 
-## Keputusan desain
-
-- Arah visual: lembar kerja cetak di layar. Latar kertas hangat, kartu putih sebagai lembar, label kegiatan berwarna solid seperti tab nomor kegiatan. Tidak ada gradasi, efek kaca, atau animasi dekoratif.
-- Huruf Atkinson Hyperlegible (SIL Open Font License) dipilih karena dirancang untuk membedakan huruf dan angka yang mirip, penting untuk membaca label titik dan ukuran. PDF memakai DejaVu Sans karena memuat simbol °, ∠, dan ≅.
-- Petak 1 cm pada gambar adalah alat ukur, bukan hiasan.
-- Kontras teks diperiksa dengan rumus WCAG; pasangan utama berada pada rasio 4,9 sampai 7,2 (lulus AA).
-- Hanya tema terang, mengikuti tampilan LKPD kertas.
-
 ## Rujukan materi
 
-Definisi dan syarat kekongruenan (s.s.s, s.sd.s, sd.s.sd) dan kesebangunan (sudut bersesuaian sama besar, sisi bersesuaian sebanding) adalah materi baku geometri SMP. Rujukan yang dapat diakses gratis:
+Syarat kekongruenan segitiga (s.s.s, s.sd.s, sd.s.sd) dan kesebangunan (sudut yang berpasangan sama besar, sisi yang berpasangan sebanding) adalah materi baku geometri SMP. Rujukan gratis:
 
 - Kemendikbudristek. *Matematika SMP/MTs Kelas IX* (Buku Siswa, Kurikulum 2021): https://static.buku.kemdikbud.go.id/content/pdf/bukuteks/kurikulum21/Matematika_BS_KLS_IX.pdf
-- Kemendikbudristek. *Buku Panduan Guru Matematika SMP Kelas IX* (Kurikulum 2021): https://static.buku.kemdikbud.go.id/content/pdf/bukuteks/kurikulum21/Matematika_BG_KLS_IX_Lc.pdf
-- Capaian Pembelajaran Matematika Fase D (SK BSKAP No. 032/H/KR/2024) memuat kemampuan menjelaskan sifat kekongruenan dan kesebangunan segitiga dan segiempat serta memakainya untuk menyelesaikan masalah. Naskah resmi perlu dicek langsung di laman BSKAP Kemendikdasmen, karena rujukan yang ditemukan saat penyusunan berupa dokumen sekunder.
+- Kemendikbudristek. *Buku Panduan Guru Matematika SMP Kelas IX*: https://static.buku.kemdikbud.go.id/content/pdf/bukuteks/kurikulum21/Matematika_BG_KLS_IX_Lc.pdf
+- Capaian Pembelajaran Matematika Fase D (SK BSKAP No. 032/H/KR/2024) memuat sifat kekongruenan dan kesebangunan segitiga dan segiempat. Rujukan yang ditemukan berupa dokumen sekunder; cek naskah resmi di laman BSKAP.
 
-Bab yang memuat materi ini pada kedua buku di atas belum diverifikasi halaman per halaman.
+Bab pada kedua buku di atas belum diverifikasi halaman per halaman.
 
 ## Lisensi pihak ketiga
 
-- Atkinson Hyperlegible: SIL Open Font License 1.1 (`public/fonts/LICENSE-AtkinsonHyperlegible.txt`).
+- Nunito: SIL Open Font License 1.1 (`public/fonts/LICENSE-Nunito.txt`).
 - DejaVu Sans: lisensi Bitstream Vera dan domain publik (`server/fonts/LICENSE-DejaVu.txt`).
-- Express dan PDFKit: lisensi MIT (lewat npm).
+- Express, PDFKit, node-postgres (`pg`): lisensi MIT.

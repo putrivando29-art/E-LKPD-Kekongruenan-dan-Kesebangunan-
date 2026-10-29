@@ -1,11 +1,16 @@
 'use strict';
-// Penyimpanan data memakai SQLite bawaan Node.js (modul node:sqlite, Node 22.5 ke atas).
-// Satu berkas database menyimpan akun, kelas, sesi, jawaban, progres, nilai, komentar, dan riwayat.
+// Lapisan database. Dua pilihan:
+//   - PostgreSQL (misalnya Supabase) bila DATABASE_URL atau POSTGRES_URL diisi. Dipakai di Vercel.
+//   - SQLite bawaan Node.js (node:sqlite) untuk menjalankan di komputer sendiri.
+// Semua kueri ditulis dengan tanda tanya (?) dan subset SQL yang berlaku di kedua database.
 const fs = require('node:fs');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
 
-const SCHEMA = `
+const TABLES = ['users', 'classes', 'sessions', 'submissions', 'events', 'attempts', 'teacher_invites'];
+
+function schema(pg) {
+  const serial = pg ? 'BIGSERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+  return `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -47,43 +52,139 @@ CREATE TABLE IF NOT EXISTS submissions (
   revision INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id ${serial},
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   actor_id TEXT NOT NULL,
   type TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS attempts (
+  id ${serial},
+  key TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS teacher_invites (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  hint TEXT NOT NULL,
+  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_by TEXT,
+  used_at TEXT,
+  revoked_at TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_users_class ON users(class_id);
 CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id);
+CREATE INDEX IF NOT EXISTS idx_attempts_key ON attempts(key, at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+`;
+}
+
+// Supabase membuka skema public lewat API REST untuk peran anon dan authenticated.
+// Website ini tidak memakai API itu: semua akses data lewat server. RLS diaktifkan tanpa kebijakan
+// sehingga akses langsung dari luar (misalnya dengan anon key) tidak dapat membaca atau menulis apa pun.
+const PG_LOCKDOWN = `
+${TABLES.map(t => `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`).join('\n')}
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON ${TABLES.join(', ')} FROM anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON ${TABLES.join(', ')} FROM authenticated';
+  END IF;
+END $$;
 `;
 
-function open(file) {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
-  db.exec('PRAGMA foreign_keys = ON;');
-  if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
-  db.exec('PRAGMA busy_timeout = 5000;');
-  db.exec(SCHEMA);
+const toPg = sql => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`); };
 
-  const cache = new Map();
-  const stmt = sql => {
-    let s = cache.get(sql);
-    if (!s) { s = db.prepare(sql); cache.set(sql, s); }
-    return s;
-  };
-  return {
-    raw: db,
-    get: (sql, ...p) => stmt(sql).get(...p),
-    all: (sql, ...p) => stmt(sql).all(...p),
-    run: (sql, ...p) => stmt(sql).run(...p),
-    tx(fn) {
-      db.exec('BEGIN IMMEDIATE');
-      try { const r = fn(); db.exec('COMMIT'); return r; }
-      catch (e) { db.exec('ROLLBACK'); throw e; }
+function openPg(url) {
+  const { Pool } = require('pg');
+  const u = new URL(url);
+  const local = ['localhost', '127.0.0.1', ''].includes(u.hostname) || u.searchParams.get('sslmode') === 'disable';
+  u.searchParams.delete('sslmode');
+  // Supabase mewajibkan SSL. Sertifikat CA dapat diberikan lewat DATABASE_CA_CERT agar sertifikat server diverifikasi.
+  const ssl = local ? false : process.env.DATABASE_CA_CERT
+    ? { ca: process.env.DATABASE_CA_CERT.replace(/\\n/g, '\n'), rejectUnauthorized: true }
+    : { rejectUnauthorized: false };
+  const pool = new Pool({ connectionString: u.toString(), ssl, max: Number(process.env.DATABASE_POOL_MAX) || 3, idleTimeoutMillis: 10000 });
+  pool.on('error', e => console.error('Koneksi database terputus:', e.message));
+
+  const bind = q => ({
+    async get(sql, ...p) { return (await q(toPg(sql), p)).rows[0]; },
+    async all(sql, ...p) { return (await q(toPg(sql), p)).rows; },
+    async run(sql, ...p) { const r = await q(toPg(sql), p); return { changes: r.rowCount }; }
+  });
+  const db = {
+    dialect: 'pg',
+    forUpdate: ' FOR UPDATE',
+    ...bind((s, p) => pool.query(s, p)),
+    async tx(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const out = await fn({ ...bind((s, p) => client.query(s, p)), forUpdate: ' FOR UPDATE' });
+        await client.query('COMMIT');
+        return out;
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     },
-    close: () => db.close()
+    close: () => pool.end()
+  };
+  // Beberapa instance Vercel dapat mulai bersamaan; kunci advisory mencegah pembuatan tabel ganda.
+  db.ready = (async () => {
+    await pool.query(`BEGIN; SELECT pg_advisory_xact_lock(820814); ${schema(true)} ${PG_LOCKDOWN} COMMIT;`);
+  })();
+  db.ready.catch(e => console.error('Gagal menyiapkan tabel database:', e.message));
+  return db;
+}
+
+function openSqlite(file) {
+  const { DatabaseSync } = require('node:sqlite');
+  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
+  const raw = new DatabaseSync(file);
+  raw.exec('PRAGMA foreign_keys = ON;');
+  if (file !== ':memory:') raw.exec('PRAGMA journal_mode = WAL;');
+  raw.exec('PRAGMA busy_timeout = 5000;');
+  raw.exec(schema(false));
+  const cache = new Map();
+  const stmt = sql => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };
+  const plain = r => (r ? { ...r } : r);
+  const api = {
+    async get(sql, ...p) { return plain(stmt(sql).get(...p)); },
+    async all(sql, ...p) { return stmt(sql).all(...p).map(plain); },
+    async run(sql, ...p) { const r = stmt(sql).run(...p); return { changes: Number(r.changes) }; }
+  };
+  // Transaksi dijalankan berurutan agar pernyataan dari permintaan lain tidak ikut masuk.
+  let queue = Promise.resolve();
+  return {
+    dialect: 'sqlite',
+    forUpdate: '',
+    ...api,
+    tx(fn) {
+      const run = queue.then(async () => {
+        raw.exec('BEGIN IMMEDIATE');
+        try { const out = await fn({ ...api, forUpdate: '' }); raw.exec('COMMIT'); return out; }
+        catch (e) { raw.exec('ROLLBACK'); throw e; }
+      });
+      queue = run.catch(() => {});
+      return run;
+    },
+    ready: Promise.resolve(),
+    close: async () => raw.close()
   };
 }
 
-module.exports = { open };
+function open(file) {
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (url && file !== ':memory:') return openPg(url);
+  return openSqlite(file || process.env.DB_FILE || path.join(__dirname, '..', 'data', 'elkpd.sqlite'));
+}
+
+module.exports = { open, openPg, openSqlite };

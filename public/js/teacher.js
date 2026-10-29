@@ -2,6 +2,7 @@
 import { api, download, local } from './api.js';
 import { esc, fmtTime, toast, confirmDialog, formDialog, sectionItems } from './ui.js';
 import { fmt } from './geo.js';
+import { icon } from './art.js';
 
 const STATUS = { belum_mulai: 'Belum mulai', mengerjakan: 'Sedang mengerjakan', dikumpulkan: 'Dikumpulkan', dibuka_kembali: 'Dibuka kembali' };
 const GRADING = { belum: 'Belum dinilai', proses: 'Sedang dinilai', selesai: 'Selesai' };
@@ -28,7 +29,8 @@ export async function renderDashboard(view, app, classId) {
   const active = classes.find(c => c.id === classId) || classes.find(c => c.id === remembered) || classes[0];
   view.innerHTML = `
     <div class="teacher">
-      <header class="section-head">
+      <header class="section-head" data-accent="lilac">
+        <span class="section-badge" aria-hidden="true">${icon('book')}</span>
         <h1 id="section-title" tabindex="-1">Dasbor Guru</h1>
         <p class="lead">Pantau pengerjaan, buka hasil, dan nilai LKPD siswa di kelas yang Anda kelola.</p>
       </header>
@@ -41,6 +43,14 @@ export async function renderDashboard(view, app, classId) {
         </form>
       </div>
       <div data-class-body></div>
+      <div class="two-col">
+        <section class="card" data-invites></section>
+        <section class="card">
+          <h2>${icon('lock')} Keamanan akun</h2>
+          <p>Akun guru hanya bisa dibuat dengan kode akses atau undangan. Siswa tidak dapat membuka dasbor ini.</p>
+          <button type="button" class="btn btn-soft" data-logout-all>Keluar dari semua perangkat</button>
+        </section>
+      </div>
     </div>`;
 
   view.querySelector('[data-class]')?.addEventListener('change', e => { location.hash = `#/guru/kelas/${e.target.value}`; });
@@ -59,6 +69,14 @@ export async function renderDashboard(view, app, classId) {
     local.set('elkpd.guru.kelas', active.id);
     renderClass(view.querySelector('[data-class-body]'), active);
   }
+  renderInvites(view.querySelector('[data-invites]'));
+  view.querySelector('[data-logout-all]').addEventListener('click', async () => {
+    const ok = await confirmDialog({ title: 'Keluar dari semua perangkat?', body: '<p>Semua sesi akun ini berakhir, termasuk di perangkat ini.</p>', ok: 'Ya, keluar semua' });
+    if (!ok) return;
+    try { await api('/api/auth/logout-all', { method: 'POST', body: {} }); } catch (e) { toast(e.message, 'error'); return; }
+    app.setUser(null);
+    location.hash = '#/masuk/guru';
+  });
 }
 
 async function renderClass(box, cls) {
@@ -144,7 +162,7 @@ export async function renderStudent(view, app, studentId) {
     const groups = s.groups || [{ items: s.items }];
     return `
       <section class="card review-section">
-        <h2>${s.kicker ? `<span class="act-tag">${esc(s.kicker)}</span> ` : ''}${esc(s.title)}</h2>
+        <h2>${icon(s.icon)} ${s.kicker ? `${esc(s.kicker)}: ` : ''}${esc(s.title)}</h2>
         <p class="muted small">Terisi ${d.progress.sections[s.id].filled} dari ${d.progress.sections[s.id].required} pertanyaan wajib${sub.checked[s.id] ? `. Diperiksa siswa pada ${esc(fmtTime(sub.checked[s.id]))}` : ''}.</p>
         ${groups.map(g => `
           ${g.title ? `<h3>${esc(g.title)}</h3>` : ''}
@@ -176,7 +194,8 @@ export async function renderStudent(view, app, studentId) {
   view.innerHTML = `
     <div class="teacher">
       <p><a href="#/guru/kelas/${d.student.classId}">Kembali ke daftar siswa</a></p>
-      <header class="section-head">
+      <header class="section-head" data-accent="peach">
+        <span class="section-badge" aria-hidden="true">${icon('user')}</span>
         <h1 id="section-title" tabindex="-1">${esc(d.student.name)}</h1>
         <p class="lead">${esc(d.student.className)}. ${esc(d.student.email)}</p>
       </header>
@@ -289,6 +308,35 @@ export async function renderStudent(view, app, studentId) {
       await confirmDialog({ title: 'Kata sandi sementara', body: `<p>Berikan kata sandi ini kepada siswa: <strong class="code">${esc(res.password)}</strong></p><p class="muted small">Kata sandi hanya ditampilkan sekali.</p>`, ok: 'Tutup', cancel: 'Tutup' });
     } catch (e) { toast(e.message, 'error'); }
   });
+}
+
+// Undangan guru: kode sekali pakai, berlaku 7 hari. Kode hanya tampil sekali setelah dibuat.
+async function renderInvites(box) {
+  box.innerHTML = '<p class="loading" role="status">Memuat undangan...</p>';
+  let list;
+  try { list = (await api('/api/teacher/invites')).invites; }
+  catch (e) { box.innerHTML = `<p class="form-error">${esc(e.message)}</p>`; return; }
+  const STATUS_INV = { aktif: 'Aktif', dipakai: 'Sudah dipakai', dibatalkan: 'Dibatalkan', kedaluwarsa: 'Kedaluwarsa' };
+  box.innerHTML = `
+    <h2>${icon('key')} Undang guru lain</h2>
+    <p>Buat kode undangan sekali pakai untuk rekan guru. Kode berlaku 7 hari.</p>
+    <button type="button" class="btn btn-primary" data-new-invite>Buat kode undangan</button>
+    ${list.length ? `<div class="table-scroll" style="margin-top:14px"><table class="data-table compact">
+      <thead><tr><th>Kode</th><th>Status</th><th>Berlaku sampai</th><th></th></tr></thead>
+      <tbody>${list.map(i => `<tr><td>…${esc(i.hint)}</td><td>${STATUS_INV[i.status]}${i.used_by_name ? ` (${esc(i.used_by_name)})` : ''}</td><td>${esc(fmtTime(i.expires_at))}</td>
+        <td>${i.status === 'aktif' ? `<button type="button" class="btn btn-small btn-quiet" data-revoke="${i.id}">Batalkan</button>` : ''}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="empty">Belum ada undangan.</p>'}`;
+  box.querySelector('[data-new-invite]').addEventListener('click', async () => {
+    try {
+      const r = await api('/api/teacher/invites', { method: 'POST', body: {} });
+      await confirmDialog({ title: 'Kode undangan guru', body: `<p>Berikan kode ini kepada guru yang Anda undang:</p><p><strong class="code invite-code">${esc(r.code)}</strong></p><p class="muted small">Kode hanya ditampilkan sekali dan hanya bisa dipakai satu kali, sampai ${esc(fmtTime(r.expiresAt))}. Guru mendaftar di halaman Masuk sebagai Guru, lalu Daftar pakai kode akses guru.</p>`, ok: 'Sudah dicatat', cancel: 'Tutup' });
+      renderInvites(box);
+    } catch (e) { toast(e.message, 'error'); }
+  });
+  box.querySelectorAll('[data-revoke]').forEach(b => b.addEventListener('click', async () => {
+    try { await api(`/api/teacher/invites/${b.dataset.revoke}/revoke`, { method: 'POST', body: {} }); toast('Undangan dibatalkan.'); renderInvites(box); }
+    catch (e) { toast(e.message, 'error'); }
+  }));
 }
 
 export { sectionItems };

@@ -1,8 +1,9 @@
 'use strict';
-// Uji alur siswa dan guru melalui HTTP terhadap server sungguhan dengan database di memori.
+// Uji alur siswa dan guru melalui HTTP terhadap server sungguhan.
+// Database: SQLite di memori, atau PostgreSQL bila TEST_DATABASE_URL diisi (npm run test:pg).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { open } = require('../server/db');
+const { openSqlite, openPg } = require('../server/db');
 const { createApp } = require('../server/app');
 const auth = require('../server/auth');
 const fullAnswers = require('./fixture');
@@ -25,34 +26,76 @@ function client() {
   };
 }
 
-function makeTeacher(email) {
-  const id = auth.newId();
-  db.run('INSERT INTO users (id, email, name, role, class_id, password_hash, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)',
-    id, email, 'Guru ' + email, 'guru', auth.hashPassword('sandiguru1'), new Date().toISOString());
-  return id;
-}
+const KODE = 'kode-rahasia-uji-123';
 
 test.before(async () => {
-  db = open(':memory:');
+  process.env.KODE_AKSES_GURU = KODE;
+  const url = process.env.TEST_DATABASE_URL;
+  if (url) {
+    // Mulai dari database kosong agar hasil uji tidak dipengaruhi data lama.
+    const { Client } = require('pg');
+    const c = new Client({ connectionString: url.replace(/[?&]sslmode=disable/, '') });
+    await c.connect();
+    await c.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    await c.end();
+    db = openPg(url);
+  } else {
+    db = openSqlite(':memory:');
+  }
+  await db.ready;
   const app = createApp(db);
   await new Promise(r => { server = app.listen(0, r); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(() => { server.close(); db.close(); });
+test.after(async () => { server.close(); await db.close(); });
 
 test('alur lengkap siswa dan guru', async t => {
   const guru = client();
-  makeTeacher('guru1@uji.id');
-  makeTeacher('guru2@uji.id');
+  const guru2 = client();
 
-  await t.test('guru masuk dan membuat kelas', async () => {
-    let r = await guru('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'salah' });
+  await t.test('pendaftaran guru wajib kode akses yang diperiksa server', async () => {
+    const akun = { name: 'Bu Rina', email: 'guru1@uji.id', password: 'sandiguru1' };
+    let r = await guru('POST', '/api/auth/register-teacher', akun);
+    assert.equal(r.status, 400, 'tanpa kode ditolak');
+    assert.ok(r.data.errors.accessCode);
+    r = await guru('POST', '/api/auth/register-teacher', { ...akun, accessCode: 'tebakan' });
+    assert.equal(r.status, 403, 'kode salah ditolak');
+    r = await guru('POST', '/api/auth/register', { ...akun, classCode: '' });
+    assert.equal(r.status, 400, 'pendaftaran umum tidak bisa membuat guru');
+    r = await guru('POST', '/api/auth/register-teacher', { ...akun, accessCode: KODE, role: 'guru' });
+    assert.equal(r.status, 201);
+    assert.equal(r.data.user.role, 'guru');
+    r = await guru('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'salah' });
     assert.equal(r.status, 401);
     r = await guru('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'sandiguru1', role: 'siswa' });
     assert.equal(r.status, 403, 'akun guru tidak boleh masuk lewat pintu siswa');
     r = await guru('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'sandiguru1', role: 'guru' });
     assert.equal(r.status, 200);
-    r = await guru('POST', '/api/teacher/classes', { name: 'VIII A' });
+  });
+
+  await t.test('undangan guru sekali pakai', async () => {
+    let r = await guru('POST', '/api/teacher/invites', {});
+    assert.equal(r.status, 201);
+    const code = r.data.code;
+    assert.match(code, /^GURU-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    r = await guru('GET', '/api/teacher/invites');
+    assert.equal(r.data.invites[0].status, 'aktif');
+    assert.ok(!JSON.stringify(r.data).includes(code), 'kode undangan tidak ditampilkan lagi');
+    r = await guru2('POST', '/api/auth/register-teacher', { name: 'Pak Dodi', email: 'guru2@uji.id', password: 'sandiguru1', accessCode: code.toLowerCase() });
+    assert.equal(r.status, 201);
+    r = await client()('POST', '/api/auth/register-teacher', { name: 'Orang Lain', email: 'lain@uji.id', password: 'sandiguru1', accessCode: code });
+    assert.equal(r.status, 403, 'undangan yang sudah dipakai ditolak');
+    r = await guru('GET', '/api/teacher/invites');
+    assert.equal(r.data.invites[0].status, 'dipakai');
+    r = await guru('POST', '/api/teacher/invites', {});
+    const r2 = await guru('POST', `/api/teacher/invites/${(await guru('GET', '/api/teacher/invites')).data.invites[0].id}/revoke`, {});
+    assert.equal(r2.status, 200);
+    const r3 = await client()('POST', '/api/auth/register-teacher', { name: 'Orang Lain', email: 'lain@uji.id', password: 'sandiguru1', accessCode: r.data.code });
+    assert.equal(r3.status, 403, 'undangan yang dibatalkan ditolak');
+  });
+
+  await t.test('guru membuat kelas', async () => {
+    const r = await guru('POST', '/api/teacher/classes', { name: 'VIII A' });
     assert.equal(r.status, 201);
     t.classA = r.data.class;
     assert.equal(t.classA.feedback_mode, 'setelah');
@@ -135,7 +178,7 @@ test('alur lengkap siswa dan guru', async t => {
     const [a, b] = await Promise.all([s1('POST', '/api/submission/submit', { confirm: true }), s1('POST', '/api/submission/submit', { confirm: true })]);
     assert.equal(a.status, 200); assert.equal(b.status, 200);
     assert.equal([a.data.already, b.data.already].filter(x => x === false).length, 1, 'hanya satu pengumpulan yang tercatat');
-    const events = db.all("SELECT * FROM events WHERE type = 'kumpul'");
+    const events = await db.all("SELECT * FROM events WHERE type = 'kumpul'");
     assert.equal(events.length, 1);
     r = await s1('PATCH', '/api/submission', { changes: { p1: 'ubah setelah kumpul' } });
     assert.equal(r.status, 409);
@@ -175,8 +218,6 @@ test('alur lengkap siswa dan guru', async t => {
     assert.equal(budi.status, 'belum_mulai');
     t.ani = ani.id;
 
-    const guru2 = client();
-    await guru2('POST', '/api/auth/login', { email: 'guru2@uji.id', password: 'sandiguru1' });
     r = await guru2('GET', `/api/teacher/students/${ani.id}`);
     assert.equal(r.status, 404, 'guru lain tidak dapat membuka siswa kelas ini');
     r = await guru2('GET', `/api/teacher/classes/${t.classA.id}/students`);
@@ -225,7 +266,7 @@ test('alur lengkap siswa dan guru', async t => {
     r = await s1('POST', '/api/submission/submit', { confirm: true });
     assert.equal(r.status, 200);
     assert.equal(r.data.already, false);
-    const ev = db.all('SELECT type, note FROM events WHERE user_id = ? ORDER BY id', t.ani).map(e => e.type);
+    const ev = (await db.all('SELECT type, note FROM events WHERE user_id = ? ORDER BY id', t.ani)).map(e => e.type);
     assert.deepEqual(ev.filter(x => ['kumpul', 'buka_kembali'].includes(x)), ['kumpul', 'buka_kembali', 'kumpul']);
   });
 
@@ -271,4 +312,30 @@ test('alur lengkap siswa dan guru', async t => {
     const login = await s1b('POST', '/api/auth/login', { email: 'ani@uji.id', password: r.data.password });
     assert.equal(login.status, 200);
   });
+});
+
+test('siswa tidak dapat memakai fitur guru dan kode akses dibatasi percobaannya', async () => {
+  const g = client();
+  await g('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'sandiguru1' });
+  const cls = (await g('POST', '/api/teacher/classes', { name: 'VIII B' })).data.class;
+  const s = client();
+  await s('POST', '/api/auth/register', { name: 'Fajar Nugroho', email: 'fajar@uji.id', password: 'sandifajar', classCode: cls.join_code });
+  for (const [m, p] of [['GET', '/api/teacher/invites'], ['POST', '/api/teacher/invites'], ['GET', `/api/teacher/classes/${cls.id}/csv`], ['PATCH', `/api/teacher/classes/${cls.id}`]]) {
+    const r = await s(m, p, m === 'GET' ? undefined : { feedbackMode: 'sebelum' });
+    assert.equal(r.status, 403, `${m} ${p}`);
+  }
+  const me = await s('GET', '/api/me');
+  assert.equal(me.data.user.role, 'siswa', 'peran tetap dari database');
+
+  await db.run('DELETE FROM attempts');
+  const tamu = client();
+  for (let i = 0; i < 5; i++) {
+    const r = await tamu('POST', '/api/auth/register-teacher', { name: 'Penebak', email: `tebak${i}@uji.id`, password: 'sandiguru1', accessCode: `salah-${i}` });
+    assert.equal(r.status, 403);
+  }
+  const r = await tamu('POST', '/api/auth/register-teacher', { name: 'Penebak', email: 'tebak9@uji.id', password: 'sandiguru1', accessCode: KODE });
+  assert.equal(r.status, 429, 'setelah 5 kode salah, percobaan berikutnya ditahan walau kodenya benar');
+
+  await s('POST', '/api/auth/logout-all', {});
+  assert.equal((await s('GET', '/api/submission')).status, 401, 'keluar dari semua perangkat mengakhiri sesi');
 });

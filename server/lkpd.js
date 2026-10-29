@@ -1,16 +1,17 @@
 'use strict';
-// Definisi isi E-LKPD yang boleh dilihat siswa (soal, pilihan, petunjuk).
+// Isi E-LKPD yang boleh dilihat siswa (soal, pilihan, petunjuk).
 // Kunci jawaban, pembahasan, dan rubrik TIDAK ada di berkas ini: lihat server/keys.js.
 //
 // Jenis butir:
-//   text    : uraian (textarea). graded 'teacher' = dinilai guru, 'none' = hanya umpan balik guru.
-//   short   : isian singkat (input satu baris), tidak dinilai.
+//   text    : uraian (kotak tulisan). graded 'teacher' = dinilai guru, 'none' = hanya umpan balik guru.
+//   short   : isian singkat satu baris, tidak dinilai.
 //   confirm : kotak centang konfirmasi.
 //   single  : pilihan tunggal (dinilai otomatis bila auto: true).
-//   multi   : pilihan ganda kompleks (dinilai otomatis).
+//   multi   : pilih beberapa (dinilai otomatis).
 //   ratio   : isian perbandingan, misalnya 1 : 2 (dinilai otomatis, bentuk setara diterima).
 //   number  : isian bilangan (dinilai otomatis dengan toleransi).
-//   simlog  : catatan hasil percobaan simulasi (diisi lewat tombol "Catat hasil").
+//   simlog  : catatan hasil percobaan simulasi (diisi lewat tombol "Catat Hasil").
+// hint = teks contoh di dalam kotak jawaban. Tidak boleh berisi jawaban.
 
 const PAIRS = [
   { value: 'A-B', label: 'A dan B' },
@@ -28,32 +29,34 @@ const BENAR_SALAH = [
   { value: 'benar', label: 'Benar' },
   { value: 'salah', label: 'Salah' }
 ];
+const ALASAN = 'Tuliskan alasanmu di sini...';
+const LANGKAH = 'Tuliskan langkahmu di sini...';
+const JAWAB = 'Tuliskan jawabanmu di sini...';
 
 const META = {
   title: 'E-LKPD Kekongruenan dan Kesebangunan',
   subject: 'Matematika',
   grade: 'Kelas VIII SMP',
-  author: 'Kelompok 8 PKD',
+  author: 'KELOMPOK 8',
+  tagline: 'Cari tahu kapan dua bangun sama persis, dan kapan hanya mirip bentuknya.',
   goals: [
     'Menentukan apakah dua bangun kongruen atau tidak.',
     'Menentukan apakah dua bangun sebangun atau tidak.',
     'Menjelaskan alasan berdasarkan konsep yang benar.'
   ],
   instructions: [
-    'Bacalah setiap soal dengan teliti.',
-    'Kerjakan secara mandiri.',
-    'Tuliskan jawaban dengan langkah yang jelas.',
-    'Sertakan alasan atau penjelasan pada pertanyaan yang memerlukannya.',
-    'Gunakan konsep yang telah dipelajari, bukan sekadar menebak.',
-    'Selesaikan seluruh aktivitas sebelum mengumpulkan LKPD.'
+    'Baca soal dengan teliti.',
+    'Kerjakan sendiri.',
+    'Tulis langkahmu dengan jelas.',
+    'Beri alasan kalau soal memintanya.',
+    'Pakai konsep yang sudah dipelajari, jangan menebak.',
+    'Selesaikan semua aktivitas sebelum mengumpulkan.'
   ],
   usage: [
-    'Masuk dengan akun siswa. Jawabanmu tersimpan otomatis di server setiap kali kamu berhenti mengetik.',
-    'Kerjakan bagian secara berurutan memakai tombol Sebelumnya dan Selanjutnya, atau pilih bagian di daftar isi.',
-    'Tanda di daftar isi menunjukkan bagian yang belum diisi, sebagian, lengkap, atau sudah diperiksa.',
-    'Tombol Periksa Jawaban baru aktif setelah semua pertanyaan wajib di aktivitas itu terisi, dan mengikuti aturan yang dipilih gurumu.',
-    'Jika koneksi terputus, jawaban disimpan sementara di perangkat ini dan dikirim ulang saat koneksi kembali.',
-    'Setelah semua bagian wajib lengkap, buka Ringkasan lalu klik Kumpulkan LKPD. Setelah dikumpulkan, kamu dapat mengunduh LKPD dalam bentuk PDF.'
+    'Jawabanmu tersimpan sendiri setiap kamu berhenti mengetik.',
+    'Pindah bagian dengan tombol Sebelumnya dan Selanjutnya.',
+    'Kalau internet putus, jawaban disimpan dulu di HP atau laptopmu.',
+    'Sudah lengkap? Buka Ringkasan, lalu klik Kumpulkan LKPD.'
   ]
 };
 
@@ -61,103 +64,116 @@ const SECTIONS = [
   {
     id: 'petunjuk',
     nav: 'Petunjuk',
-    title: 'Identitas, Tujuan, dan Petunjuk',
-    intro: 'Periksa identitasmu, baca tujuan pembelajaran dan petunjuk pengerjaan, lalu lengkapi isian di bawah.',
+    title: 'Kenalan dulu',
+    accent: 'butter',
+    icon: 'book',
+    intro: 'Cek identitasmu, lalu baca tujuan dan petunjuknya.',
     items: [
-      { id: 'id_absen', type: 'short', label: 'Nomor absen', required: true, maxLength: 10, graded: 'none' },
-      { id: 'id_baca', type: 'confirm', label: 'Saya sudah membaca tujuan pembelajaran dan petunjuk pengerjaan.', required: true, graded: 'none' }
+      { id: 'id_absen', type: 'short', label: 'Nomor absenmu', hint: 'contoh: 12', required: true, maxLength: 10, graded: 'none' },
+      { id: 'id_baca', type: 'confirm', label: 'Aku sudah membaca tujuan dan petunjuk.', required: true, graded: 'none' }
     ]
   },
   {
     id: 'pemantik',
-    nav: 'Pemantik',
+    nav: 'Pemanasan',
     title: 'Pertanyaan Pemantik',
-    intro: 'Jawablah menurut pengalaman dan pendapatmu sendiri. Tidak ada jawaban benar atau salah pada bagian ini. Gurumu akan membaca jawabanmu.',
+    accent: 'lilac',
+    icon: 'spark',
+    intro: 'Jawab dengan pendapatmu sendiri. Tidak ada jawaban salah di sini.',
     items: [
-      { id: 'p1', type: 'text', label: 'Pernahkah kamu melihat dua benda yang bentuk dan ukurannya sama persis? Sebutkan contohnya.', required: true, graded: 'none' },
-      { id: 'p2', type: 'text', label: 'Apakah dua benda yang bentuknya sama tetapi ukurannya berbeda dapat dikatakan sama? Mengapa?', required: true, graded: 'none' },
-      { id: 'p3', type: 'text', label: 'Jika sebuah gambar diperbesar, apakah bentuknya akan berubah?', required: true, graded: 'none' },
-      { id: 'p4', type: 'text', label: 'Menurutmu, apa perbedaan antara bangun yang memiliki bentuk dan ukuran sama dengan bangun yang hanya memiliki bentuk sama?', required: true, graded: 'none' }
+      { id: 'p1', type: 'text', label: 'Pernahkah kamu melihat dua benda yang bentuk dan ukurannya sama persis? Sebutkan contohnya.', hint: JAWAB, required: true, graded: 'none' },
+      { id: 'p2', type: 'text', label: 'Dua benda bentuknya sama, tapi ukurannya beda. Bisakah disebut sama? Kenapa?', hint: JAWAB, required: true, graded: 'none' },
+      { id: 'p3', type: 'text', label: 'Kalau sebuah gambar diperbesar, apakah bentuknya berubah?', hint: JAWAB, required: true, graded: 'none' },
+      { id: 'p4', type: 'text', label: 'Apa bedanya bangun yang bentuk dan ukurannya sama, dengan bangun yang hanya bentuknya sama?', hint: JAWAB, required: true, graded: 'none' }
     ]
   },
   {
     id: 'a1',
     nav: 'Aktivitas 1',
     kicker: 'Aktivitas 1',
+    step: 1,
     title: 'Mengamati',
-    intro: 'Amati bangun A, B, C, dan D. Semua bangun digambar pada petak berukuran 1 cm × 1 cm dengan skala yang sama. Gunakan alat bantu untuk memperbesar tampilan, menampilkan ukuran, serta memutar dan menumpuk dua bangun.',
+    accent: 'peach',
+    icon: 'eye',
+    intro: 'Lihat bangun A, B, C, dan D. Satu kotak kecil = 1 cm.',
     figure: 'observe',
     checkable: true,
     items: [
-      { id: 'a1_q1', type: 'multi', label: '1. Pasangan bangun mana yang memiliki bentuk dan ukuran yang sama persis? Pilih semua pasangan yang tepat.', options: PAIRS, required: true, auto: true, points: 2 },
-      { id: 'a1_q1_alasan', type: 'text', label: 'Alasan jawaban nomor 1', required: true, graded: 'teacher', points: 2 },
-      { id: 'a1_q2', type: 'multi', label: '2. Pasangan bangun mana yang memiliki bentuk sama tetapi ukuran berbeda? Pilih semua pasangan yang tepat.', options: PAIRS, required: true, auto: true, points: 2 },
-      { id: 'a1_q2_alasan', type: 'text', label: 'Alasan jawaban nomor 2', required: true, graded: 'teacher', points: 2 },
-      { id: 'a1_q3', type: 'text', label: '3. Apa perbedaan utama kedua jenis pasangan bangun tersebut?', required: true, graded: 'teacher', points: 3 }
+      { id: 'a1_q1', type: 'multi', label: 'Bangun mana yang bentuk dan ukurannya sama persis?', note: 'Boleh pilih lebih dari satu pasang.', options: PAIRS, required: true, auto: true, points: 2 },
+      { id: 'a1_q1_alasan', type: 'text', label: 'Kenapa kamu memilih pasangan itu?', hint: ALASAN, required: true, graded: 'teacher', points: 2 },
+      { id: 'a1_q2', type: 'multi', label: 'Bangun mana yang bentuknya sama, tapi ukurannya beda?', note: 'Boleh pilih lebih dari satu pasang.', options: PAIRS, required: true, auto: true, points: 2 },
+      { id: 'a1_q2_alasan', type: 'text', label: 'Kenapa kamu memilih pasangan itu?', hint: ALASAN, required: true, graded: 'teacher', points: 2 },
+      { id: 'a1_q3', type: 'text', label: 'Apa beda utama kedua jenis pasangan tadi?', hint: JAWAB, required: true, graded: 'teacher', points: 3 }
     ]
   },
   {
     id: 'a2',
     nav: 'Aktivitas 2',
     kicker: 'Aktivitas 2',
+    step: 2,
     title: 'Menanya',
-    intro: 'Berdasarkan gambar dan hasil pengamatanmu, tuliskan pertanyaan yang menurutmu penting untuk memahami perbedaan bangun kongruen dan sebangun.',
+    accent: 'pink',
+    icon: 'ask',
+    intro: 'Lihat lagi gambarnya. Pertanyaan apa yang muncul di kepalamu tentang kongruen dan sebangun?',
     figure: 'observe',
     guide: [
-      'Mulailah dengan kata tanya: apa, mengapa, bagaimana, atau apakah.',
-      'Pertanyaan yang baik membandingkan sesuatu, misalnya panjang sisi atau besar sudut dua bangun.',
-      'Contoh awal: "Apa yang terjadi pada besar sudut jika sebuah bangun diperbesar?"'
+      'Mulai dengan: apa, kenapa, bagaimana, atau apakah.',
+      'Coba bandingkan sesuatu, misalnya panjang sisi atau besar sudut.',
+      'Contoh: "Apa yang terjadi pada sudut kalau bangun diperbesar?"'
     ],
     items: [
-      { id: 'a2_q1', type: 'text', label: 'Pertanyaanku (tulis minimal satu pertanyaan, boleh lebih)', rows: 6, required: true, graded: 'teacher', points: 3 },
-      { id: 'a2_q2', type: 'text', label: 'Dugaan jawabanku untuk pertanyaan di atas', rows: 4, required: false, graded: 'none' }
+      { id: 'a2_q1', type: 'text', label: 'Tulis pertanyaanmu (minimal satu).', hint: 'Tuliskan pertanyaanmu di sini...', rows: 5, required: true, graded: 'teacher', points: 3 },
+      { id: 'a2_q2', type: 'text', label: 'Apa dugaan jawabanmu?', hint: 'Tuliskan dugaanmu di sini...', rows: 3, required: false, graded: 'none' }
     ]
   },
   {
     id: 'a3',
     nav: 'Aktivitas 3',
     kicker: 'Aktivitas 3',
-    title: 'Mencoba dengan Simulasi',
-    intro: 'Lakukan percobaan pada dua simulasi berikut. Setiap kali kamu mencoba keadaan baru, klik "Catat hasil" agar ukurannya tersimpan sebagai catatan percobaan. Setiap simulasi membutuhkan minimal 2 catatan.',
+    step: 3,
+    title: 'Mencoba',
+    accent: 'butter',
+    icon: 'ruler',
+    intro: 'Mainkan simulasinya. Setiap selesai mencoba, klik "Catat Hasil". Tiap simulasi perlu 2 catatan.',
     checkable: true,
     groups: [
       {
         id: 'simA',
-        title: 'Simulasi A: Kekongruenan',
+        title: 'Simulasi A: Kongruen',
         sim: 'congruence',
         steps: [
-          'Seret segitiga DEF untuk menggeser posisinya. Seret titik bulat di atasnya untuk memutar.',
-          'Gunakan tombol Cerminkan untuk membalik segitiga DEF.',
-          'Ubah panjang sisi DEF dengan penggeser untuk mencoba keadaan yang berbeda.',
-          'Klik "Impitkan ke ABC" untuk menumpuk DEF tepat di atas ABC dengan A ke D dan B ke E.'
+          'Seret segitiga DEF ke mana saja. Apakah panjang sisinya berubah?',
+          'Putar DEF dengan titik bulat di atasnya, lalu klik Cerminkan.',
+          'Klik "Bandingkan Bangun". Apakah DEF pas menutupi ABC?',
+          'Sekarang ubah panjang salah satu sisi DEF. Apa yang terjadi?'
         ],
         items: [
-          { id: 'simA_log', type: 'simlog', sim: 'congruence', label: 'Catatan percobaan Simulasi A', required: true, minEntries: 2, graded: 'none' },
-          { id: 'a3a_q1', type: 'text', label: '1. Apa yang terjadi ketika posisi segitiga diubah tanpa mengubah panjang sisinya?', required: true, graded: 'teacher', points: 2 },
-          { id: 'a3a_q2', type: 'text', label: '2. Bagaimana kamu menentukan bahwa kedua segitiga kongruen?', required: true, graded: 'teacher', points: 2 },
-          { id: 'a3a_q3', type: 'single', label: '3. Apakah dua segitiga tetap kongruen jika salah satu sisinya diperbesar?', options: YA_TIDAK, required: true, auto: true, points: 1 },
-          { id: 'a3a_q3_alasan', type: 'text', label: 'Jelaskan alasanmu untuk nomor 3.', required: true, graded: 'teacher', points: 2 }
+          { id: 'simA_log', type: 'simlog', sim: 'congruence', label: 'Catatan percobaanmu', required: true, minEntries: 2, graded: 'none' },
+          { id: 'a3a_q1', type: 'text', label: 'Apa yang terjadi saat segitiga digeser tanpa mengubah panjang sisinya?', hint: JAWAB, required: true, graded: 'teacher', points: 2 },
+          { id: 'a3a_q2', type: 'text', label: 'Bagaimana caramu tahu dua segitiga itu kongruen?', hint: JAWAB, required: true, graded: 'teacher', points: 2 },
+          { id: 'a3a_q3', type: 'single', label: 'Kalau satu sisinya diperbesar, apakah kedua segitiga tetap kongruen?', options: YA_TIDAK, required: true, auto: true, points: 1 },
+          { id: 'a3a_q3_alasan', type: 'text', label: 'Kenapa?', hint: ALASAN, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
         id: 'simB',
-        title: 'Simulasi B: Kesebangunan',
+        title: 'Simulasi B: Sebangun',
         sim: 'similarity',
         steps: [
-          'Segitiga PQR bersisi PQ = 3 cm, QR = 4 cm, dan PR = 5 cm. Segitiga STU berpasangan dengan P ke S, Q ke T, dan R ke U.',
-          'Mode "Faktor skala": geser faktor skala k. Semua sisi STU dikalikan k.',
-          'Mode "Ubah sisi satu per satu": ubah panjang ST, TU, dan SU sendiri-sendiri, lalu amati sudut dan perbandingannya.',
-          'Atur faktor skala menjadi 2, lalu bandingkan dengan segitiga STU bersisi 6 cm, 8 cm, dan 10 cm.'
+          'Geser faktor skala k. Perhatikan panjang sisi STU.',
+          'Klik "k = 2". Bandingkan dengan STU yang sisinya 6, 8, dan 10 cm.',
+          'Lihat sudutnya. Apakah sudut ikut berubah saat k berubah?',
+          'Pilih "Ubah sisi sendiri", lalu ubah satu sisi saja. Masih sebangun?'
         ],
         items: [
-          { id: 'simB_log', type: 'simlog', sim: 'similarity', label: 'Catatan percobaan Simulasi B', required: true, minEntries: 2, graded: 'none' },
-          { id: 'a3b_q1', type: 'text', label: '1. Apa yang terjadi pada ukuran segitiga ketika faktor skala diperbesar?', required: true, graded: 'teacher', points: 2 },
-          { id: 'a3b_q2', type: 'single', label: '2. Apakah bentuk segitiga berubah jika semua sisi diperbesar dengan faktor yang sama?', options: [{ value: 'berubah', label: 'Bentuknya berubah' }, { value: 'tetap', label: 'Bentuknya tetap' }], required: true, auto: true, points: 1 },
-          { id: 'a3b_q2_alasan', type: 'text', label: 'Jelaskan alasanmu untuk nomor 2.', required: true, graded: 'teacher', points: 2 },
-          { id: 'a3b_q3', type: 'text', label: '3. Bagaimana cara menentukan apakah dua bangun sebangun?', required: true, graded: 'teacher', points: 2 },
-          { id: 'a3b_q4_pq', type: 'ratio', label: '4. Tentukan perbandingan sisi-sisi yang bersesuaian pada segitiga PQR (3, 4, 5 cm) dan STU (6, 8, 10 cm). PQ : ST =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 },
-          { id: 'a3b_q4_qr', type: 'ratio', label: 'QR : TU =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 },
-          { id: 'a3b_q4_pr', type: 'ratio', label: 'PR : SU =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 }
+          { id: 'simB_log', type: 'simlog', sim: 'similarity', label: 'Catatan percobaanmu', required: true, minEntries: 2, graded: 'none' },
+          { id: 'a3b_q1', type: 'text', label: 'Apa yang terjadi saat faktor skala diperbesar?', hint: JAWAB, required: true, graded: 'teacher', points: 2 },
+          { id: 'a3b_q2', type: 'single', label: 'Kalau semua sisi diperbesar dengan faktor yang sama, apakah bentuk segitiga berubah?', options: [{ value: 'berubah', label: 'Bentuknya berubah' }, { value: 'tetap', label: 'Bentuknya tetap' }], required: true, auto: true, points: 1 },
+          { id: 'a3b_q2_alasan', type: 'text', label: 'Kenapa?', hint: ALASAN, required: true, graded: 'teacher', points: 2 },
+          { id: 'a3b_q3', type: 'text', label: 'Bagaimana cara tahu dua bangun sebangun?', hint: JAWAB, required: true, graded: 'teacher', points: 2 },
+          { id: 'a3b_q4_pq', type: 'ratio', label: 'PQR bersisi 3, 4, 5 cm dan STU bersisi 6, 8, 10 cm. Tentukan perbandingannya. PQ : ST =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 },
+          { id: 'a3b_q4_qr', type: 'ratio', label: 'QR : TU =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 },
+          { id: 'a3b_q4_pr', type: 'ratio', label: 'PR : SU =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 }
         ]
       }
     ]
@@ -165,25 +181,27 @@ const SECTIONS = [
   {
     id: 'latihan',
     nav: 'Latihan',
-    title: 'Latihan Penerapan Konsep',
-    intro: 'Kerjakan soal secara berurutan. Soal disusun dari mengenali hubungan bangun sampai menerapkan konsep. Tuliskan langkah pengerjaan dan alasanmu.',
+    title: 'Latihan Soal',
+    accent: 'coral',
+    icon: 'pencil',
+    intro: 'Soalnya makin lama makin menantang. Tulis langkah dan alasanmu.',
     checkable: true,
     groups: [
       {
         id: 'soal1',
-        title: 'Soal 1: Kekongruenan',
+        title: 'Soal 1: Kongruen',
         figure: 'soal1',
         given: [
           'Segitiga ABC: AB = 5 cm, BC = 7 cm, CA = 8 cm.',
           'Segitiga DEF: DE = 5 cm, EF = 7 cm, FD = 8 cm.',
-          'Pasangan titik yang bersesuaian: A dengan D, B dengan E, C dengan F. Tanda garis yang sama pada gambar menunjukkan sisi yang sama panjang.'
+          'Pasangannya: A dengan D, B dengan E, C dengan F. Tanda garis yang sama berarti sisinya sama panjang.'
         ],
         items: [
-          { id: 's1a', type: 'single', label: 'a. Apakah segitiga ABC dan segitiga DEF kongruen?', options: YA_TIDAK, required: true, auto: true, points: 1 },
-          { id: 's1_langkah', type: 'text', label: 'Langkah pengerjaan: tuliskan pasangan sisi yang bersesuaian dan bandingkan panjangnya.', required: true, graded: 'teacher', points: 3 },
-          { id: 's1b', type: 'text', label: 'b. Jelaskan alasanmu.', required: true, graded: 'teacher', points: 2 },
-          { id: 's1c', type: 'single', label: 'c. Syarat kekongruenan yang kamu gunakan adalah ...', options: [
-            { value: 'sss', label: 'Sisi, sisi, sisi (s.s.s): ketiga pasang sisi bersesuaian sama panjang' },
+          { id: 's1a', type: 'single', label: 'a. Apakah segitiga ABC dan DEF kongruen?', options: YA_TIDAK, required: true, auto: true, points: 1 },
+          { id: 's1_langkah', type: 'text', label: 'Langkahmu: pasangkan sisi-sisinya, lalu bandingkan panjangnya.', hint: LANGKAH, required: true, graded: 'teacher', points: 3 },
+          { id: 's1b', type: 'text', label: 'b. Apa alasanmu?', hint: ALASAN, required: true, graded: 'teacher', points: 2 },
+          { id: 's1c', type: 'single', label: 'c. Syarat kongruen yang kamu pakai:', options: [
+            { value: 'sss', label: 'Sisi, sisi, sisi (s.s.s): ketiga pasang sisi sama panjang' },
             { value: 'sas', label: 'Sisi, sudut, sisi (s.sd.s)' },
             { value: 'asa', label: 'Sudut, sisi, sudut (sd.s.sd)' },
             { value: 'aaa', label: 'Sudut, sudut, sudut (sd.sd.sd)' }
@@ -192,86 +210,85 @@ const SECTIONS = [
       },
       {
         id: 'soal2',
-        title: 'Soal 2: Kesebangunan',
+        title: 'Soal 2: Sebangun',
         figure: 'soal2',
         given: [
           'Segitiga PQR: PQ = 3 cm, QR = 4 cm, PR = 5 cm.',
           'Segitiga STU: ST = 6 cm, TU = 8 cm, SU = 10 cm.',
-          'Pasangan titik yang bersesuaian: P dengan S, Q dengan T, R dengan U.'
+          'Pasangannya: P dengan S, Q dengan T, R dengan U.'
         ],
         items: [
-          { id: 's2a', type: 'single', label: 'a. Apakah segitiga PQR dan segitiga STU sebangun?', options: YA_TIDAK, required: true, auto: true, points: 1 },
-          { id: 's2b_pq', type: 'ratio', label: 'b. Perbandingan sisi yang bersesuaian. PQ : ST =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 },
-          { id: 's2b_qr', type: 'ratio', label: 'QR : TU =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 },
-          { id: 's2b_pr', type: 'ratio', label: 'PR : SU =', placeholder: 'contoh: 2 : 3', required: true, auto: true, points: 1 },
-          { id: 's2c', type: 'number', label: 'c. Faktor skala dari segitiga PQR ke segitiga STU adalah k =', placeholder: 'tulis bilangan', required: true, auto: true, points: 1 },
-          { id: 's2_langkah', type: 'text', label: 'Langkah pengerjaan untuk b dan c.', required: true, graded: 'teacher', points: 3 },
-          { id: 's2d', type: 'text', label: 'd. Jelaskan alasanmu berdasarkan perbandingan sisi.', required: true, graded: 'teacher', points: 2 }
+          { id: 's2a', type: 'single', label: 'a. Apakah segitiga PQR dan STU sebangun?', options: YA_TIDAK, required: true, auto: true, points: 1 },
+          { id: 's2b_pq', type: 'ratio', label: 'b. Perbandingan sisi yang berpasangan. PQ : ST =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 },
+          { id: 's2b_qr', type: 'ratio', label: 'QR : TU =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 },
+          { id: 's2b_pr', type: 'ratio', label: 'PR : SU =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 },
+          { id: 's2c', type: 'number', label: 'c. Faktor skala dari PQR ke STU, k =', hint: 'tulis angka', required: true, auto: true, points: 1 },
+          { id: 's2_langkah', type: 'text', label: 'Langkahmu untuk b dan c.', hint: LANGKAH, required: true, graded: 'teacher', points: 3 },
+          { id: 's2d', type: 'text', label: 'd. Apa alasanmu, dilihat dari perbandingan sisi?', hint: ALASAN, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
         id: 'soal3',
-        title: 'Soal 3: Mengenali hubungan dua bangun',
+        title: 'Soal 3: Dua persegi panjang',
         figure: 'soal3',
         given: [
-          'Persegi panjang KLMN berukuran 6 cm × 4 cm.',
-          'Persegi panjang WXYZ berukuran 9 cm × 6 cm.'
+          'Persegi panjang KLMN: 6 cm × 4 cm.',
+          'Persegi panjang WXYZ: 9 cm × 6 cm.'
         ],
         items: [
-          { id: 's3', type: 'single', label: 'Pernyataan yang benar tentang kedua persegi panjang adalah ...', options: [
+          { id: 's3', type: 'single', label: 'Mana yang benar?', options: [
             { value: 'kongruen', label: 'Kongruen' },
-            { value: 'sebangun', label: 'Sebangun, tetapi tidak kongruen' },
+            { value: 'sebangun', label: 'Sebangun, tapi tidak kongruen' },
             { value: 'tidak', label: 'Tidak sebangun dan tidak kongruen' }
           ], required: true, auto: true, points: 2 },
-          { id: 's3_alasan', type: 'text', label: 'Tuliskan perhitungan atau alasanmu.', required: true, graded: 'teacher', points: 2 }
+          { id: 's3_alasan', type: 'text', label: 'Tulis hitungan atau alasanmu.', hint: ALASAN, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
         id: 'soal4',
-        title: 'Soal 4: Benar atau salah',
-        intro: 'Tentukan apakah setiap pernyataan berikut benar atau salah.',
+        title: 'Soal 4: Benar atau salah?',
         items: [
           { id: 's4_1', type: 'single', label: '1) Dua bangun yang kongruen pasti sebangun.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
           { id: 's4_2', type: 'single', label: '2) Dua bangun yang sebangun pasti kongruen.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
           { id: 's4_3', type: 'single', label: '3) Setiap dua persegi pasti sebangun.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
           { id: 's4_4', type: 'single', label: '4) Setiap dua persegi panjang pasti sebangun.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
-          { id: 's4_5', type: 'single', label: '5) Dua segitiga yang ketiga pasang sudutnya sama besar pasti kongruen.', options: BENAR_SALAH, required: true, auto: true, points: 1 }
+          { id: 's4_5', type: 'single', label: '5) Dua segitiga yang ketiga sudutnya sama besar pasti kongruen.', options: BENAR_SALAH, required: true, auto: true, points: 1 }
         ]
       },
       {
         id: 'soal5',
-        title: 'Soal 5: Menentukan panjang sisi',
+        title: 'Soal 5: Cari panjang sisi',
         given: [
-          'Segitiga KLM sebangun dengan segitiga XYZ, dengan K bersesuaian dengan X, L dengan Y, dan M dengan Z.',
-          'KL = 6 cm, LM = 9 cm, dan XY = 4 cm.'
+          'Segitiga KLM sebangun dengan segitiga XYZ. Pasangannya: K dengan X, L dengan Y, M dengan Z.',
+          'KL = 6 cm, LM = 9 cm, XY = 4 cm.'
         ],
         items: [
-          { id: 's5', type: 'number', label: 'Panjang YZ = ... cm', unit: 'cm', placeholder: 'tulis bilangan', required: true, auto: true, points: 2 },
-          { id: 's5_langkah', type: 'text', label: 'Langkah pengerjaan.', required: true, graded: 'teacher', points: 3 }
+          { id: 's5', type: 'number', label: 'Panjang YZ = ... cm', unit: 'cm', hint: 'tulis angka', required: true, auto: true, points: 2 },
+          { id: 's5_langkah', type: 'text', label: 'Langkahmu.', hint: LANGKAH, required: true, graded: 'teacher', points: 3 }
         ]
       },
       {
         id: 'soal6',
-        title: 'Soal 6: Menentukan besar sudut',
+        title: 'Soal 6: Cari besar sudut',
         given: [
-          'Segitiga ABC kongruen dengan segitiga PQR, dengan A bersesuaian dengan P, B dengan Q, dan C dengan R.',
-          'Besar sudut A = 50° dan besar sudut B = 70°.'
+          'Segitiga ABC kongruen dengan segitiga PQR. Pasangannya: A dengan P, B dengan Q, C dengan R.',
+          'Sudut A = 50° dan sudut B = 70°.'
         ],
         items: [
-          { id: 's6', type: 'number', label: 'Besar sudut R = ... °', unit: '°', placeholder: 'tulis bilangan', required: true, auto: true, points: 2 },
-          { id: 's6_langkah', type: 'text', label: 'Langkah pengerjaan.', required: true, graded: 'teacher', points: 2 }
+          { id: 's6', type: 'number', label: 'Besar sudut R = ... °', unit: '°', hint: 'tulis angka', required: true, auto: true, points: 2 },
+          { id: 's6_langkah', type: 'text', label: 'Langkahmu.', hint: LANGKAH, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
         id: 'soal7',
-        title: 'Soal 7: Masalah sehari-hari',
+        title: 'Soal 7: Memperbesar foto',
         given: [
-          'Sebuah foto berukuran lebar 4 cm dan panjang 6 cm diperbesar sehingga lebarnya menjadi 10 cm.',
-          'Foto hasil pembesaran harus sebangun dengan foto asli.'
+          'Foto berukuran lebar 4 cm dan panjang 6 cm diperbesar. Lebarnya jadi 10 cm.',
+          'Foto baru harus sebangun dengan foto lama.'
         ],
         items: [
-          { id: 's7', type: 'number', label: 'Panjang foto hasil pembesaran = ... cm', unit: 'cm', placeholder: 'tulis bilangan', required: true, auto: true, points: 2 },
-          { id: 's7_langkah', type: 'text', label: 'Langkah pengerjaan.', required: true, graded: 'teacher', points: 3 }
+          { id: 's7', type: 'number', label: 'Panjang foto baru = ... cm', unit: 'cm', hint: 'tulis angka', required: true, auto: true, points: 2 },
+          { id: 's7_langkah', type: 'text', label: 'Langkahmu.', hint: LANGKAH, required: true, graded: 'teacher', points: 3 }
         ]
       }
     ]
@@ -280,27 +297,33 @@ const SECTIONS = [
     id: 'a4',
     nav: 'Aktivitas 4',
     kicker: 'Aktivitas 4',
+    step: 4,
     title: 'Menalar',
-    intro: 'Gunakan hasil pengamatan, simulasi, dan latihan untuk melengkapi pernyataan berikut dengan kalimatmu sendiri.',
+    accent: 'lilac',
+    icon: 'bulb',
+    intro: 'Lengkapi kalimat di bawah dengan kata-katamu sendiri.',
     items: [
-      { id: 'n1', type: 'text', label: '1. Dua bangun dikatakan kongruen jika ...', required: true, graded: 'teacher', points: 3 },
-      { id: 'n2', type: 'text', label: '2. Dua bangun dikatakan sebangun jika ...', required: true, graded: 'teacher', points: 3 },
-      { id: 'n3', type: 'text', label: '3. Perbedaan utama antara kongruen dan sebangun adalah ...', required: true, graded: 'teacher', points: 3 },
-      { id: 'n4', type: 'text', label: '4. Bagaimana hubungan panjang sisi dan besar sudut pada bangun yang kongruen?', required: true, graded: 'teacher', points: 3 },
-      { id: 'n5', type: 'text', label: '5. Bagaimana hubungan panjang sisi dan besar sudut pada bangun yang sebangun?', required: true, graded: 'teacher', points: 3 }
+      { id: 'n1', type: 'text', label: 'Dua bangun disebut kongruen jika ...', hint: JAWAB, required: true, graded: 'teacher', points: 3 },
+      { id: 'n2', type: 'text', label: 'Dua bangun disebut sebangun jika ...', hint: JAWAB, required: true, graded: 'teacher', points: 3 },
+      { id: 'n3', type: 'text', label: 'Beda utama kongruen dan sebangun adalah ...', hint: JAWAB, required: true, graded: 'teacher', points: 3 },
+      { id: 'n4', type: 'text', label: 'Pada bangun yang kongruen, bagaimana sisi dan sudutnya?', hint: JAWAB, required: true, graded: 'teacher', points: 3 },
+      { id: 'n5', type: 'text', label: 'Pada bangun yang sebangun, bagaimana sisi dan sudutnya?', hint: JAWAB, required: true, graded: 'teacher', points: 3 }
     ]
   },
   {
     id: 'a5',
     nav: 'Aktivitas 5',
     kicker: 'Aktivitas 5',
+    step: 5,
     title: 'Refleksi',
-    intro: 'Jawaban refleksi bersifat pribadi. Tidak ada jawaban benar atau salah. Gurumu akan membaca dan dapat memberi tanggapan.',
+    accent: 'cream',
+    icon: 'heart',
+    intro: 'Ceritakan pengalaman belajarmu. Tidak ada jawaban benar atau salah.',
     items: [
-      { id: 'r1', type: 'text', label: '1. Bagian mana yang paling kamu pahami?', required: true, graded: 'none' },
-      { id: 'r2', type: 'text', label: '2. Bagian mana yang masih membingungkan?', required: true, graded: 'none' },
-      { id: 'r3', type: 'text', label: '3. Apakah simulasi membantu kamu memahami perbedaan kongruen dan sebangun? Jelaskan.', required: true, graded: 'none' },
-      { id: 'r4', type: 'text', label: '4. Strategi apa yang kamu gunakan untuk menentukan apakah dua bangun kongruen atau sebangun?', required: true, graded: 'none' }
+      { id: 'r1', type: 'text', label: 'Bagian mana yang paling kamu pahami?', hint: 'Ceritakan di sini...', required: true, graded: 'none' },
+      { id: 'r2', type: 'text', label: 'Bagian mana yang masih membingungkan?', hint: 'Ceritakan di sini...', required: true, graded: 'none' },
+      { id: 'r3', type: 'text', label: 'Apakah simulasi membantumu memahami beda kongruen dan sebangun? Ceritakan.', hint: 'Ceritakan di sini...', required: true, graded: 'none' },
+      { id: 'r4', type: 'text', label: 'Strategi apa yang kamu pakai untuk menentukan kongruen atau sebangun?', hint: 'Ceritakan di sini...', required: true, graded: 'none' }
     ]
   }
 ];

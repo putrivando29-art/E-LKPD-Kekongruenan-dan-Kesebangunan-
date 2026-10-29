@@ -12,7 +12,7 @@ const TZ = process.env.ZONA_WAKTU || 'Asia/Jakarta';
 const TZ_LABEL = process.env.LABEL_ZONA_WAKTU || 'WIB';
 
 // Warna sama dengan token di public/css/style.css
-const C = { ink: '#1E2B2A', muted: '#4D5B59', line: '#C9CFC4', primary: '#1F5C4F', accent: '#B5541C', paper: '#F7F3EA', ok: '#1F6B3A', bad: '#A32C1C' };
+const C = { ink: '#493B37', muted: '#75625C', line: '#E6D5C6', primary: '#A4503B', band: '#F6C6AD', accent: '#E98B73', paper: '#FFF8EF', butter: '#F5DF91', ok: '#493B37', bad: '#A4503B' };
 
 function fmtTime(iso) {
   if (!iso) return '-';
@@ -75,8 +75,8 @@ function buildPdf({ user, cls, sub, progress, totals, showKey, showGrades, teach
     ensure(60);
     doc.y += 6;
     const top = doc.y;
-    doc.save().rect(left, top, W, 28).fill(C.primary).restore();
-    doc.font('B').fontSize(12).fillColor('#FFFFFF').text(kicker ? `${kicker}: ${title}` : title, left + 10, top + 7, { width: W - 20 });
+    doc.save().roundedRect(left, top, W, 28, 8).fill(C.band).restore();
+    doc.font('B').fontSize(12).fillColor(C.ink).text(kicker ? `${kicker}: ${title}` : title, left + 12, top + 7, { width: W - 24 });
     doc.y = top + 36;
   };
 
@@ -130,11 +130,11 @@ function buildPdf({ user, cls, sub, progress, totals, showKey, showGrades, teach
   };
 
   // ---------- Halaman judul dan identitas ----------
-  doc.save().rect(0, 0, doc.page.width, 8).fill(C.accent).restore();
+  doc.save().rect(0, 0, doc.page.width, 10).fill(C.accent).rect(0, 10, doc.page.width, 4).fill(C.butter).restore();
   doc.font('B').fontSize(18).fillColor(C.primary).text(META.title, left, 56, { width: W });
   doc.font('R').fontSize(11).fillColor(C.muted).text(`${META.subject}, ${META.grade}. Disusun oleh ${META.author}.`, { width: W });
   doc.y += 4;
-  if (teacherCopy) para('Salinan guru: memuat kunci, skor otomatis, dan penilaian.', { size: 9, color: C.accent });
+  if (teacherCopy) para('Salinan guru: memuat kunci, skor otomatis, dan penilaian.', { size: 9, color: C.primary });
   doc.moveTo(left, doc.y + 4).lineTo(left + W, doc.y + 4).strokeColor(C.line).stroke();
   doc.y += 14;
 
@@ -172,13 +172,13 @@ function buildPdf({ user, cls, sub, progress, totals, showKey, showGrades, teach
         else box(answerText(it, v));
         if (it.auto && showKey) {
           const c = G.isCorrect(it.id, v);
-          para(`${c ? 'Benar' : 'Belum tepat'} (${c ? it.points : 0}/${it.points}). Jawaban yang diharapkan: ${KEYS[it.id].show}. ${KEYS[it.id].explain}`,
+          para(`${c ? '✓ Benar' : '✗ Belum tepat'} (${c ? it.points : 0}/${it.points}). Jawaban yang diharapkan: ${KEYS[it.id].show}. ${KEYS[it.id].explain}`,
             { size: 9, color: c ? C.ok : C.bad, gap: 6 });
         }
         const gr = sub.grades[it.id];
         if (showGrades && gr && (gr.comment || typeof gr.score === 'number')) {
           const sc = typeof gr.score === 'number' ? `Skor guru: ${fmtNum(gr.score)}/${it.points}. ` : '';
-          para(`${sc}${gr.comment ? 'Umpan balik guru: ' + gr.comment : ''}`, { size: 9, color: C.accent, gap: 6 });
+          para(`${sc}${gr.comment ? 'Umpan balik guru: ' + gr.comment : ''}`, { size: 9, color: C.primary, gap: 6 });
         }
       }
     }

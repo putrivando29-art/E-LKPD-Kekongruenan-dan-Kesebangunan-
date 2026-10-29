@@ -1,12 +1,10 @@
 'use strict';
-const path = require('node:path');
+// Menjalankan server di komputer sendiri. Tanpa DATABASE_URL, data disimpan di SQLite (data/elkpd.sqlite).
 const { open } = require('./db');
 const { createApp } = require('./app');
 
 const PORT = Number(process.env.PORT) || 3000;
-const DB_FILE = process.env.DB_FILE || path.join(__dirname, '..', 'data', 'elkpd.sqlite');
-
-const db = open(DB_FILE);
+const db = open();
 const app = createApp(db, {
   // Aktifkan bila situs berjalan di belakang HTTPS (misalnya hosting dengan reverse proxy).
   secureCookie: process.env.COOKIE_SECURE === '1',
@@ -15,5 +13,5 @@ const app = createApp(db, {
 
 app.listen(PORT, () => {
   console.log(`E-LKPD berjalan di http://localhost:${PORT}`);
-  console.log(`Database: ${DB_FILE}`);
+  console.log(`Database: ${db.dialect === 'pg' ? 'PostgreSQL (DATABASE_URL)' : process.env.DB_FILE || 'data/elkpd.sqlite'}`);
 });

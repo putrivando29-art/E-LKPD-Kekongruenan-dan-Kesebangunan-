@@ -111,10 +111,10 @@ export function isFilled(item, value) {
 export function fillHint(item, value) {
   if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) return 'Belum diisi';
   switch (item.type) {
-    case 'text': return 'Minimal 3 huruf atau angka';
-    case 'number': return 'Tuliskan sebuah bilangan, misalnya 7,5';
-    case 'ratio': return 'Tuliskan perbandingan, misalnya 2 : 3';
-    case 'simlog': return `Perlu ${item.minEntries} catatan, baru ${value.length}`;
+    case 'text': return 'Tulis minimal 3 huruf';
+    case 'number': return 'Tulis angka, misal 7,5';
+    case 'ratio': return 'Tulis perbandingan, misal 2 : 3';
+    case 'simlog': return `Perlu ${item.minEntries} catatan, baru ada ${value.length}`;
     default: return 'Belum diisi';
   }
 }
