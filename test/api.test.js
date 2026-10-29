@@ -218,10 +218,13 @@ test('alur lengkap siswa dan guru', async t => {
     assert.equal(budi.status, 'belum_mulai');
     t.ani = ani.id;
 
+    // Semua guru berbagi kelas yang sama.
+    r = await guru2('GET', '/api/teacher/classes');
+    assert.ok(r.data.classes.some(c => c.id === t.classA.id), 'guru kedua melihat kelas guru pertama');
     r = await guru2('GET', `/api/teacher/students/${ani.id}`);
-    assert.equal(r.status, 404, 'guru lain tidak dapat membuka siswa kelas ini');
+    assert.equal(r.status, 200, 'guru kedua dapat membuka hasil siswa');
     r = await guru2('GET', `/api/teacher/classes/${t.classA.id}/students`);
-    assert.equal(r.status, 404);
+    assert.equal(r.status, 200);
 
     r = await guru('GET', `/api/teacher/students/${ani.id}`);
     assert.equal(r.status, 200);
@@ -260,8 +263,8 @@ test('alur lengkap siswa dan guru', async t => {
     assert.equal(st.data.status, 'reopened');
     assert.ok(st.data.locked.includes('latihan'));
     assert.equal(st.data.reveal.latihan.allowed, false, 'kunci tidak terlihat selama revisi');
-    r = await s1('PATCH', '/api/submission', { changes: { s5: '7', r2: 'Saya masih bingung pada faktor skala pecahan.' } });
-    assert.ok(r.data.rejected.s5, 'butir di aktivitas yang sudah diperiksa terkunci');
+    r = await s1('PATCH', '/api/submission', { changes: { s7: '7', r2: 'Saya masih bingung pada faktor skala pecahan.' } });
+    assert.match(r.data.rejected.s7, /terkunci/, 'butir di aktivitas yang sudah diperiksa terkunci');
     assert.ok(!r.data.rejected.r2);
     r = await s1('POST', '/api/submission/submit', { confirm: true });
     assert.equal(r.status, 200);
@@ -338,4 +341,26 @@ test('siswa tidak dapat memakai fitur guru dan kode akses dibatasi percobaannya'
 
   await s('POST', '/api/auth/logout-all', {});
   assert.equal((await s('GET', '/api/submission')).status, 401, 'keluar dari semua perangkat mengakhiri sesi');
+});
+
+test('hapus kelas: wajib konfirmasi nama, siswa dan jawabannya ikut terhapus', async () => {
+  const g = client();
+  await g('POST', '/api/auth/login', { email: 'guru2@uji.id', password: 'sandiguru1' });
+  const cls = (await g('POST', '/api/teacher/classes', { name: 'Kelas Hapus' })).data.class;
+  const s = client();
+  await s('POST', '/api/auth/register', { name: 'Gita Permata', email: 'gita@uji.id', password: 'sandigita1', classCode: cls.join_code });
+  await s('PATCH', '/api/submission', { changes: { p1: 'Dua buku tulis yang sama' } });
+  let r = await g('POST', `/api/teacher/classes/${cls.id}/delete`, { confirmName: 'salah' });
+  assert.equal(r.status, 400, 'nama konfirmasi salah ditolak');
+  r = await s('POST', `/api/teacher/classes/${cls.id}/delete`, { confirmName: 'Kelas Hapus' });
+  assert.equal(r.status, 403, 'siswa tidak dapat menghapus kelas');
+  const g1 = client();
+  await g1('POST', '/api/auth/login', { email: 'guru1@uji.id', password: 'sandiguru1' });
+  r = await g1('POST', `/api/teacher/classes/${cls.id}/delete`, { confirmName: 'Kelas Hapus' });
+  assert.equal(r.status, 200, 'guru lain juga dapat menghapus kelas bersama');
+  assert.equal(r.data.deletedStudents, 1);
+  assert.equal((await s('GET', '/api/submission')).status, 401, 'akun siswa ikut terhapus');
+  assert.equal(await db.get('SELECT id FROM users WHERE email = ?', 'gita@uji.id'), undefined);
+  r = await g('GET', '/api/teacher/classes');
+  assert.ok(!r.data.classes.some(c => c.id === cls.id));
 });

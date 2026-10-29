@@ -107,7 +107,7 @@ async function fillVisibleSection(page) {
 
   // Koneksi terputus
   await ctx.setOffline(true);
-  await page.fill('#f-p2', 'Belum tentu, karena ukurannya berbeda walau bentuknya mirip.');
+  await page.fill('#f-p3', 'Belum tentu, karena ukurannya berbeda walau bentuknya mirip.');
   await page.waitForSelector('#save-status[data-kind=offline]', { timeout: 8000 });
   log('Status offline:', await page.textContent('#save-status'));
   await shot(page, '03-offline');
@@ -190,21 +190,14 @@ async function fillVisibleSection(page) {
   await page.check('[name=f-a3a_q3][value=tidak]');
   await page.check('[name=f-a3b_q2][value=tetap]');
   await page.fill('#f-a3b_q4_pq', '3 : 6');
-  await page.fill('#f-a3b_q4_qr', '1/2');
-  await page.fill('#f-a3b_q4_pr', '0,5');
   await fillVisibleSection(page);
 
   // Latihan
   await page.click('.pager >> text=Selanjutnya');
-  await page.waitForSelector('#f-s5');
-  const radios = { s1a: 'ya', s1c: 'sss', s2a: 'ya', s3: 'sebangun', s4_1: 'benar', s4_2: 'salah', s4_3: 'benar', s4_4: 'salah', s4_5: 'benar' };
+  await page.waitForSelector('#f-s7');
+  const radios = { s1a: 'ya', s1c: 'sss', s2a: 'ya', s4_1: 'benar', s4_2: 'salah', s4_5: 'benar' };
   for (const [k, v] of Object.entries(radios)) await page.check(`[name=f-${k}][value=${v}]`);
-  await page.fill('#f-s2b_pq', '1 : 2');
-  await page.fill('#f-s2b_qr', '4:8');
-  await page.fill('#f-s2b_pr', '5 banding 10');
   await page.fill('#f-s2c', '2');
-  await page.fill('#f-s5', '6');
-  await page.fill('#f-s6', '60');
   await page.fill('#f-s7', 'lima belas');
   await page.waitForTimeout(200);
   log('Isian bilangan berupa kata:', await page.textContent('[data-item=s7] .q-chip'));
@@ -218,7 +211,7 @@ async function fillVisibleSection(page) {
     await fillVisibleSection(page);
   }
   // Kosongkan satu jawaban refleksi untuk menguji pengumpulan yang belum lengkap
-  await page.fill('#f-r4', '');
+  await page.fill('#f-r2', '');
   await page.click('.pager >> text=Selanjutnya');
   await page.waitForSelector('[data-submit]');
   await page.click('[data-submit]', { force: true });
@@ -227,7 +220,7 @@ async function fillVisibleSection(page) {
   log('Daftar yang belum diisi:', (await page.textContent('.missing')).replace(/\s+/g, ' ').trim().slice(0, 120));
   await shot(page, '08-ringkasan-belum');
   await page.click('.missing a');
-  await page.fill('#f-r4', 'Saya membandingkan sisi dan sudut yang bersesuaian.');
+  await page.fill('#f-r2', 'Faktor skala yang berupa pecahan.');
   await page.click('[data-toc=ringkasan] a');
   await page.waitForSelector('[data-submit]:not([aria-disabled])');
   await page.click('[data-submit]');
@@ -302,6 +295,38 @@ async function fillVisibleSection(page) {
   log('Status setelah dibuka kembali:', (await page.textContent('.student-summary dd')).trim());
   await page.click('#logout');
 
+  // ---------- Guru kedua: melihat kelas yang sama, lalu membuat dan menghapus kelas ----------
+  await page.click('text=Masuk sebagai Guru');
+  await page.click('text=Daftar pakai kode akses guru');
+  await page.fill('[name=name]', 'Pak Budi Uji');
+  await page.fill('[name=email]', `guru2${Date.now()}@uji.id`);
+  await page.fill('[name=password]', guruPass);
+  await page.fill('[name=accessCode]', ACCESS);
+  await page.click('[data-account] button');
+  await page.waitForSelector('.students');
+  const opts = await page.locator('[data-class] option').allTextContents();
+  if (!opts.some(o => o.startsWith('VIII Uji'))) throw new Error('guru kedua tidak melihat kelas guru pertama: ' + opts.join(' | '));
+  log('Guru kedua melihat kelas:', opts.join(' | '));
+  if (!(await page.locator('.students tbody tr', { hasText: DEWI }).count())) throw new Error('guru kedua tidak melihat siswa');
+  log('Guru kedua melihat siswa', DEWI);
+  await page.fill('[data-new-class] [name=name]', 'Kelas Coba');
+  await page.click('[data-new-class] button');
+  await page.waitForFunction(() => document.querySelector('.class-info h2')?.textContent === 'Kelas Coba');
+  await page.click('[data-delete-class]');
+  await page.fill('dialog [name=confirmName]', 'salah ketik');
+  await page.click('dialog button[value=ok]');
+  await page.waitForSelector('#toast:not([hidden])');
+  log('Hapus kelas dengan nama salah:', await page.textContent('#toast'));
+  await page.click('[data-delete-class]');
+  await page.fill('dialog [name=confirmName]', 'Kelas Coba');
+  await page.click('dialog button[value=ok]');
+  await page.waitForFunction(() => /dihapus/.test(document.getElementById('toast')?.textContent || ''));
+  log('Hapus kelas:', await page.textContent('#toast'));
+  await page.waitForSelector('[data-class]');
+  const after = await page.locator('[data-class] option').allTextContents();
+  if (after.some(o => o.startsWith('Kelas Coba'))) throw new Error('kelas tidak terhapus');
+  await page.click('#logout');
+
   // ---------- Tampilan HP (layar sentuh) ----------
   const m = await browser.newContext({ viewport: { width: 375, height: 760 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const mp = await m.newPage();
@@ -328,7 +353,7 @@ async function fillVisibleSection(page) {
   // pemantik diisi agar aktivitas terbuka
   await mp.goto(base + '/#/lkpd/pemantik');
   await mp.waitForSelector('#f-p1');
-  for (const id of ['p1', 'p2', 'p3', 'p4']) await mp.fill(`#f-${id}`, 'Jawaban percobaan dari HP.');
+  for (const id of ['p1', 'p3']) await mp.fill(`#f-${id}`, 'Jawaban percobaan dari HP.');
   await mp.goto(base + '/#/lkpd/a3');
   await mp.waitForSelector('[data-sim=congruence] polygon');
   await noOverflow(mp, 'aktivitas 3 HP');

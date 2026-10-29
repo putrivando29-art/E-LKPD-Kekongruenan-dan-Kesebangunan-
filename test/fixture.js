@@ -1,6 +1,6 @@
 'use strict';
 // Jawaban lengkap dan benar untuk seluruh butir wajib (dipakai uji).
-const { SECTIONS, sectionItems } = require('../server/lkpd');
+const { SECTIONS, sectionItems, ITEMS } = require('../server/lkpd');
 
 module.exports = function fullAnswers() {
   const simA = { at: new Date().toISOString(), note: '', ab: 5, bc: 7, ca: 8, de: 5, ef: 7, fd: 8, aA: 60, aB: 81.79, aC: 38.21, aD: 60, aE: 81.79, aF: 38.21, rot: 25, mirror: false, moved: true };
@@ -20,5 +20,7 @@ module.exports = function fullAnswers() {
     s3: 'sebangun', s4_1: 'benar', s4_2: 'salah', s4_3: 'benar', s4_4: 'salah', s4_5: 'salah',
     s5: '6 cm', s6: '60°', s7: '15,0'
   });
+  // Buang butir yang tidak ada lagi di LKPD.
+  for (const id of Object.keys(a)) if (!ITEMS.has(id)) delete a[id];
   return a;
 };

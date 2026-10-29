@@ -32,7 +32,7 @@ export async function renderDashboard(view, app, classId) {
       <header class="section-head" data-accent="lilac">
         <span class="section-badge" aria-hidden="true">${icon('book')}</span>
         <h1 id="section-title" tabindex="-1">Dasbor Guru</h1>
-        <p class="lead">Pantau pengerjaan, buka hasil, dan nilai LKPD siswa di kelas yang Anda kelola.</p>
+        <p class="lead">Pantau, buka hasil, dan nilai LKPD siswa. Semua guru melihat kelas yang sama.</p>
       </header>
       <div class="card class-bar">
         ${classes.length ? `<label class="field-inline">Kelas
@@ -104,7 +104,8 @@ async function renderClass(box, cls) {
       <div>
         <h2>${esc(c.name)}</h2>
         <p>Kode kelas untuk pendaftaran siswa: <strong class="code">${esc(c.join_code)}</strong></p>
-        <p class="muted small">${data.students.length} siswa terdaftar. ${data.allSubmitted ? 'Seluruh siswa sudah mengumpulkan.' : ''}</p>
+        <p class="muted small">${data.students.length} siswa terdaftar. ${data.allSubmitted ? 'Seluruh siswa sudah mengumpulkan.' : ''}${c.teacher_name ? ` Dibuat oleh ${esc(c.teacher_name)}.` : ''}</p>
+        <button type="button" class="btn btn-small btn-danger" data-delete-class>Hapus kelas</button>
       </div>
       <label class="field">
         <span>Jawaban benar dan pembahasan tersedia untuk siswa</span>
@@ -127,6 +128,23 @@ async function renderClass(box, cls) {
     } catch (err) { toast(err.message, 'error'); e.target.value = c.feedback_mode; }
   });
   box.querySelector('[data-refresh]').addEventListener('click', () => renderClass(box, cls));
+  box.querySelector('[data-delete-class]').addEventListener('click', async () => {
+    const n = data.students.length;
+    const r = await formDialog({
+      title: `Hapus kelas ${c.name}?`,
+      intro: `<p>${n ? `<strong>${n} akun siswa</strong> di kelas ini beserta semua jawaban, nilai, dan riwayatnya akan ikut terhapus.` : 'Kelas ini belum punya siswa.'} Tindakan ini tidak bisa dibatalkan.</p><p>Ketik nama kelas <strong>${esc(c.name)}</strong> untuk konfirmasi.</p>`,
+      fields: [{ name: 'confirmName', label: 'Nama kelas', required: true }],
+      ok: 'Hapus kelas'
+    });
+    if (!r) return;
+    try {
+      const res = await api(`/api/teacher/classes/${c.id}/delete`, { method: 'POST', body: { confirmName: r.confirmName } });
+      toast(`Kelas ${c.name} dihapus${res.deletedStudents ? ` bersama ${res.deletedStudents} akun siswa` : ''}.`);
+      local.del('elkpd.guru.kelas');
+      if (location.hash === '#/guru') window.dispatchEvent(new HashChangeEvent('hashchange'));
+      else location.hash = '#/guru';
+    } catch (e) { toast(e.message, 'error'); }
+  });
   box.querySelector('[data-csv]').addEventListener('click', e => dl(e.target, `/api/teacher/classes/${c.id}/csv`));
   box.querySelectorAll('[data-pdf]').forEach(b => b.addEventListener('click', () => dl(b, `/api/teacher/students/${b.dataset.pdf}/pdf`)));
 }

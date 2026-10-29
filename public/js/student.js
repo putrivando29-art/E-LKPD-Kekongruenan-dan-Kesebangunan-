@@ -213,10 +213,13 @@ export class Workspace {
 
   // ---------- Tampilan ----------
 
+  // Label urutan agar siswa tahu posisinya dari awal sampai akhir, misalnya "Bagian 3 dari 9 · Aktivitas 1 dari 5".
   stepLabel(id) {
+    const order = this.sectionsOrder();
     const s = this.section(id);
-    if (s?.step) return `Aktivitas ${s.step} dari 5`;
-    return { petunjuk: 'Persiapan', pemantik: 'Pemanasan', latihan: 'Latihan soal', ringkasan: 'Langkah terakhir' }[id] || '';
+    const part = `Bagian ${order.indexOf(id) + 1} dari ${order.length}`;
+    const name = s?.step ? `Aktivitas ${s.step} dari 5` : { petunjuk: 'Persiapan', pemantik: 'Pemanasan', latihan: 'Latihan soal', ringkasan: 'Langkah terakhir' }[id];
+    return `${part} · ${name}`;
   }
 
   render(container, sectionId) {

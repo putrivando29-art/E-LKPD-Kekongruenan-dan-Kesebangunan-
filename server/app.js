@@ -366,25 +366,26 @@ function createApp(db, opts = {}) {
 
   const teacher = needRole('guru');
 
+  // Semua akun guru mengelola kelas yang sama (satu sekolah, satu tim guru). Hak akses guru tetap
+  // hanya untuk akun berperan 'guru' di database; siswa tidak pernah lolos middleware `teacher`.
   async function ownClass(req, classId) {
     const cls = await getClass(db, classId);
-    if (!cls || cls.teacher_id !== req.user.id) throw new HttpError(404, 'Kelas tidak ditemukan.');
+    if (!cls) throw new HttpError(404, 'Kelas tidak ditemukan.');
     return cls;
   }
-  // Guru hanya dapat membuka siswa di kelas miliknya. Siswa kelas lain dibalas "tidak ditemukan".
   async function ownStudent(req, studentId) {
     const u = await db.get("SELECT * FROM users WHERE id = ? AND role = 'siswa'", studentId);
     if (!u) throw new HttpError(404, 'Siswa tidak ditemukan.');
     const cls = await getClass(db, u.class_id);
-    if (!cls || cls.teacher_id !== req.user.id) throw new HttpError(404, 'Siswa tidak ditemukan.');
+    if (!cls) throw new HttpError(404, 'Siswa tidak ditemukan.');
     return { u, cls };
   }
 
   app.get('/api/teacher/classes', teacher, async (req, res) => {
-    const rows = await db.all(`SELECT c.*,
+    const rows = await db.all(`SELECT c.*, t.name AS teacher_name,
       (SELECT CAST(COUNT(*) AS INTEGER) FROM users u WHERE u.class_id = c.id AND u.role = 'siswa') AS students,
       (SELECT CAST(COUNT(*) AS INTEGER) FROM users u JOIN submissions s ON s.user_id = u.id WHERE u.class_id = c.id AND s.status = 'submitted') AS submitted
-      FROM classes c WHERE c.teacher_id = ? ORDER BY c.created_at`, req.user.id);
+      FROM classes c LEFT JOIN users t ON t.id = c.teacher_id ORDER BY c.created_at`);
     res.json({ classes: rows.map(r => ({ ...r, students: Number(r.students), submitted: Number(r.submitted) })) });
   });
 
@@ -409,6 +410,20 @@ function createApp(db, opts = {}) {
     res.json({ class: await getClass(db, cls.id) });
   });
 
+  // Menghapus kelas beserta akun siswa di dalamnya (jawaban, sesi, dan riwayat ikut terhapus).
+  // Guru wajib mengetik ulang nama kelas agar tidak terhapus karena salah klik.
+  app.post('/api/teacher/classes/:id/delete', teacher, async (req, res) => {
+    const cls = await ownClass(req, req.params.id);
+    if (String(req.body?.confirmName ?? '').trim() !== cls.name) throw new HttpError(400, `Ketik nama kelas "${cls.name}" dengan tepat untuk menghapus.`);
+    const out = await db.tx(async t => {
+      const n = await t.get("SELECT CAST(COUNT(*) AS INTEGER) AS n FROM users WHERE class_id = ? AND role = 'siswa'", cls.id);
+      await t.run("DELETE FROM users WHERE class_id = ? AND role = 'siswa'", cls.id);
+      await t.run('DELETE FROM classes WHERE id = ?', cls.id);
+      return { ok: true, deletedStudents: Number(n.n) };
+    });
+    res.json(out);
+  });
+
   async function studentRow(u) {
     const sub = await getSubmission(db, u.id);
     if (!sub) return { id: u.id, name: u.name, email: u.email, status: 'belum_mulai', percent: 0, submittedAt: null, auto: null, autoMax: null, grading: 'belum', finalScore: null };
@@ -431,7 +446,8 @@ function createApp(db, opts = {}) {
     const cls = await ownClass(req, req.params.id);
     const rows = [];
     for (const u of await classStudents(cls)) rows.push(await studentRow(u));
-    res.json({ class: cls, allSubmitted: await classAllSubmitted(db, cls.id), students: rows });
+    const creator = await db.get('SELECT name FROM users WHERE id = ?', cls.teacher_id);
+    res.json({ class: { ...cls, teacher_name: creator?.name || null }, allSubmitted: await classAllSubmitted(db, cls.id), students: rows });
   });
 
   app.get('/api/teacher/classes/:id/csv', teacher, async (req, res) => {
