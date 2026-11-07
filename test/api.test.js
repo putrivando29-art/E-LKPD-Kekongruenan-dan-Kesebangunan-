@@ -107,7 +107,7 @@ test('alur lengkap siswa dan guru', async t => {
     let r = await s1('POST', '/api/auth/register', { name: 'Ani', email: 'ani@uji.id', password: 'sandiani1', classCode: 'SALAH1' });
     assert.equal(r.status, 400);
     assert.ok(r.data.errors.classCode);
-    r = await s1('POST', '/api/auth/register', { name: 'A', email: 'bukan-email', password: '123', classCode: t.classA.join_code });
+    r = await s1('POST', '/api/auth/register', { name: 'A', email: 'bukan email!', password: '123', classCode: t.classA.join_code });
     assert.equal(r.status, 400);
     assert.ok(r.data.errors.name && r.data.errors.email && r.data.errors.password);
     r = await s1('POST', '/api/auth/register', { name: 'Ani Lestari', email: 'ani@uji.id', password: 'sandiani1', classCode: t.classA.join_code.toLowerCase() });
@@ -117,6 +117,16 @@ test('alur lengkap siswa dan guru', async t => {
     assert.equal(r.status, 201);
     r = await client()('POST', '/api/auth/register', { name: 'Ani Lagi', email: 'ANI@uji.id', password: 'sandiani1', classCode: t.classA.join_code });
     assert.equal(r.status, 409, 'email ganda ditolak');
+    // Siswa boleh memakai nama pengguna (tanpa email), kata sandi minimal 6, dan kode kelas boleh berspasi.
+    const s3 = client();
+    const code = (await guru('POST', '/api/teacher/classes', { name: 'VIII Z' })).data.class.join_code;
+    r = await s3('POST', '/api/auth/register', { name: 'Citra Ayu', email: 'Citra.Ayu', password: 'abc123', classCode: ` ${code.slice(0, 3).toLowerCase()} ${code.slice(3)} ` });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    r = await client()('POST', '/api/auth/login', { email: 'citra.ayu', password: 'abc123', role: 'siswa' });
+    assert.equal(r.status, 200, 'masuk dengan nama pengguna');
+    r = await client()('POST', '/api/auth/register-teacher', { name: 'Guru Tanpa Email', email: 'gurutanpaemail', password: 'sandiguru1', accessCode: KODE });
+    assert.equal(r.status, 400, 'guru tetap wajib email');
+    assert.ok(r.data.errors.email);
   });
 
   await t.test('pembatasan akses', async () => {

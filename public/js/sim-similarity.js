@@ -130,7 +130,10 @@ export function createSimilaritySim(root, { onRecord, canRecord = () => true }) 
       return `<tr><th scope="row">${n}</th><td>${fmt(a)}°</td><td>${fmt(b)}°</td><td class="${eq ? 'eq' : 'neq'}">${eq ? 'Sama' : 'Beda'}</td></tr>`;
     }).join('');
     const card = (ok, label, text) => `<div class="result ${ok ? 'ok' : 'no'}">${statusIcon(ok ? 'done' : 'part')}<div><b>${label}</b><span>${text}</span></div></div>`;
+    const similar = angSame && ratioSame;
     result.innerHTML = `
+      <p class="verdict ${similar ? 'ok' : 'no'}">${statusIcon(similar ? 'done' : 'part')}
+        <span><b>Kesimpulan:</b> ${similar ? `STU <u>sebangun</u> dengan PQR. Semua sisi dikali ${fmt(r[0], 2)}.` : 'STU <u>tidak sebangun</u> dengan PQR (sisinya tidak dikali angka yang sama).'}</span></p>
       <div class="result-cards">
         ${card(angSame, 'Sudut yang berpasangan', angSame ? 'Semua sama besar' : 'Ada yang beda')}
         ${card(ratioSame, 'Hasil bagi sisi STU : PQR', ratioSame ? `Semua ${fmt(r[0], 2)}` : `${fmt(r[0], 2)}; ${fmt(r[1], 2)}; ${fmt(r[2], 2)}`)}

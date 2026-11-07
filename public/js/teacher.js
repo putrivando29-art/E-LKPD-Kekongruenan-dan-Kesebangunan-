@@ -104,6 +104,11 @@ async function renderClass(box, cls) {
       <div>
         <h2>${esc(c.name)}</h2>
         <p>Kode kelas untuk pendaftaran siswa: <strong class="code">${esc(c.join_code)}</strong></p>
+        <div class="share-link">
+          <label class="field"><span>Tautan pendaftaran siswa (kode kelas sudah terisi). Tempel di RuangKelas atau grup kelas.</span>
+            <span class="pass-wrap"><input type="text" readonly value="${esc(`${location.origin}/#/daftar/${c.join_code}`)}" data-share><button type="button" class="btn btn-small btn-primary" data-copy>Salin tautan</button></span>
+          </label>
+        </div>
         <p class="muted small">${data.students.length} siswa terdaftar. ${data.allSubmitted ? 'Seluruh siswa sudah mengumpulkan.' : ''}${c.teacher_name ? ` Dibuat oleh ${esc(c.teacher_name)}.` : ''}</p>
         <button type="button" class="btn btn-small btn-danger" data-delete-class>Hapus kelas</button>
       </div>
@@ -128,6 +133,11 @@ async function renderClass(box, cls) {
     } catch (err) { toast(err.message, 'error'); e.target.value = c.feedback_mode; }
   });
   box.querySelector('[data-refresh]').addEventListener('click', () => renderClass(box, cls));
+  box.querySelector('[data-copy]').addEventListener('click', async () => {
+    const inp = box.querySelector('[data-share]');
+    try { await navigator.clipboard.writeText(inp.value); toast('Tautan disalin. Tempel di RuangKelas atau grup kelas.'); }
+    catch { inp.select(); toast('Tekan Ctrl + C untuk menyalin tautan yang sudah dipilih.'); }
+  });
   box.querySelector('[data-delete-class]').addEventListener('click', async () => {
     const n = data.students.length;
     const r = await formDialog({

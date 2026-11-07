@@ -1,7 +1,7 @@
 // Ruang kerja siswa: menampilkan bagian LKPD, menyimpan jawaban otomatis, memeriksa jawaban, dan mengumpulkan.
 import { api, download, local, ApiError } from './api.js';
 import { esc, fmtTime, fmtClock, toast, confirmDialog, isFilled, fillHint, sectionItems } from './ui.js';
-import { observeFigure, problemFigure } from './figures.js';
+import { observeFigure, problemFigure, learnFigure } from './figures.js';
 import { createCongruenceSim } from './sim-congruence.js';
 import { createSimilaritySim } from './sim-similarity.js';
 import { fmt, missionBar } from './geo.js';
@@ -304,7 +304,9 @@ export class Workspace {
       html += `<p class="notice notice-pink">Gurumu membuka LKPD lagi untuk diperbaiki${last ? `: "${esc(last.note)}"` : ''}. Kumpulkan lagi setelah selesai.</p>`;
     }
     if (s.id === 'petunjuk') html += this.identityHtml();
+    if (s.learn) html += this.learnHtml(s.learn);
     if (s.figure) html += '<div class="card figure-card" data-figure></div>';
+    if (s.help) html += this.helpHtml(s.help);
     if (s.guide) html += `<div class="card guide sticky-note"><span class="tape" aria-hidden="true"></span><h2>Tips membuat pertanyaan</h2><ul>${s.guide.map(g => `<li>${esc(g)}</li>`).join('')}</ul></div>`;
     if (s.items) html += `<div class="q-list ${s.id === 'a5' ? 'reflect' : ''}">${this.itemsHtml(s.items, s)}</div>`;
     if (s.groups) {
@@ -314,11 +316,13 @@ export class Workspace {
         return `
         <section class="card group ${g.sim ? 'sim-card' : ''}" data-group="${g.id}" aria-labelledby="g-${g.id}">
           <div class="group-head">${tag ? `<span class="group-tag" aria-hidden="true">${tag}</span>` : ''}<h2 id="g-${g.id}">${esc(g.sim ? g.title : title)}</h2></div>
+          ${g.learn ? `<div class="group-learn">${this.learnHtml(g.learn, true)}</div>` : ''}
           ${g.steps ? `<div class="mission" data-mission="${g.id}"></div>` : ''}
           <div class="group-body ${g.sim ? 'sim-inner' : ''}">
             ${g.sim ? `<div class="sim" data-sim="${g.sim}"></div>` : ''}
             ${g.given ? `<div class="given"><h3>Diketahui</h3><ul>${g.given.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
             ${g.figure ? `<div class="problem-figure" data-problem="${g.figure}"></div>` : ''}
+            ${g.help ? this.helpHtml(g.help) : ''}
             <div class="q-list">${this.itemsHtml(g.items, s)}</div>
           </div>
         </section>`;
@@ -330,6 +334,7 @@ export class Workspace {
     const fig = body.querySelector('[data-figure]');
     if (fig) observeFigure(fig, s.id);
     body.querySelectorAll('[data-problem]').forEach(n => problemFigure(n, n.dataset.problem));
+    body.querySelectorAll('[data-learn-figure]').forEach(n => learnFigure(n, n.dataset.learnFigure));
     body.querySelectorAll('[data-mission]').forEach(n => missionBar(n, s.groups.find(g => g.id === n.dataset.mission).steps));
     body.querySelectorAll('[data-sim]').forEach(n => this.mountSim(n, s));
     this.bindInputs(body, s);
@@ -338,6 +343,27 @@ export class Workspace {
       if (st.reveal[s.id]?.checked && st.reveal[s.id]?.allowed && !this.feedback[s.id]) this.runCheck(s, true);
     }
     this.renderGrades(body, s);
+  }
+
+  // Kartu materi singkat: poin utama, gambar contoh, dan cara cek langkah demi langkah (atau tabel contekan).
+  learnHtml(l, inGroup = false) {
+    const table = l.table ? `
+      <div class="table-scroll"><table class="data-table learn-table">
+        <thead><tr>${l.table.head.map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead>
+        <tbody>${l.table.rows.map(r => `<tr><th scope="row">${esc(r[0])}</th>${r.slice(1).map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table></div>` : '';
+    return `
+      <div class="learn ${inGroup ? '' : 'card'}">
+        <h3>${icon('bulb')} ${esc(l.title)}</h3>
+        ${l.points ? `<ul class="learn-points">${l.points.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+        ${l.figure ? `<div class="learn-figure" data-learn-figure="${l.figure}"></div>` : ''}
+        ${l.steps ? `<div class="learn-steps"><p class="learn-steps-title">${esc(l.stepsTitle || 'Caranya')}</p><ol>${l.steps.map(p => `<li>${esc(p)}</li>`).join('')}</ol></div>` : ''}
+        ${table}
+      </div>`;
+  }
+
+  helpHtml(text) {
+    return `<details class="hint"><summary>${icon('ask')} Butuh bantuan?</summary><p>${esc(text)}</p></details>`;
   }
 
   identityHtml() {

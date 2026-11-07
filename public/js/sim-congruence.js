@@ -129,7 +129,10 @@ export function createCongruenceSim(root, { onRecord, canRecord = () => true }) 
     if (sideEq === 3 && angEq === 3) note = snapped ? 'DEF menutupi ABC dengan pas. Semua titik dan sisi berimpit.' : 'Posisi dan arah DEF berbeda, tapi semua pasangan sisi dan sudut tetap sama. Coba klik "Bandingkan Bangun".';
     else note = snapped ? `DEF tidak pas menutupi ABC. Ada ${3 - sideEq} pasang sisi dan ${3 - angEq} pasang sudut yang beda.` : `Ada ${3 - sideEq} pasang sisi dan ${3 - angEq} pasang sudut yang beda.`;
     const card = (label, n, ok) => `<div class="result ${ok ? 'ok' : 'no'}">${statusIcon(ok ? 'done' : 'part')}<div><b>${label}</b><span>${n} dari 3 sama</span></div></div>`;
+    const congruent = sideEq === 3 && angEq === 3;
     result.innerHTML = `
+      <p class="verdict ${congruent ? 'ok' : 'no'}">${statusIcon(congruent ? 'done' : 'part')}
+        <span><b>Kesimpulan:</b> ${congruent ? 'DEF <u>kongruen</u> dengan ABC (bentuk dan ukurannya sama).' : 'DEF <u>tidak kongruen</u> dengan ABC (ada sisi yang beda panjang).'}</span></p>
       <div class="result-cards">
         ${card('Sisi yang berpasangan', sideEq, sideEq === 3)}
         ${card('Sudut yang berpasangan', angEq, angEq === 3)}

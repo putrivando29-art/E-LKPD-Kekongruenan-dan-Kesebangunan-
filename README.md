@@ -61,7 +61,16 @@ Tentang SSL: tanpa `DATABASE_CA_CERT`, koneksi ke Supabase tetap terenkripsi, te
 | 8. Aktivitas 5: Refleksi | 2 pertanyaan | Umpan balik guru saja |
 | 9. Ringkasan | Status tiap bagian, Kumpulkan LKPD, unduh PDF | |
 
-Totalnya 29 isian wajib: 13 pilihan atau isian angka (diperiksa otomatis) dan 12 uraian singkat. Di bagian atas setiap halaman tertulis posisinya, misalnya "Bagian 5 dari 9 · Aktivitas 3 dari 5".
+Totalnya 29 isian wajib: 13 pilihan atau isian angka (diperiksa otomatis) dan 12 uraian singkat.
+
+Revisi dari uji coba siswa (angket RuangKelas, 6 November 2026: dua siswa menyebut bagian kongruen membingungkan, satu siswa kesulitan latihan karena butuh pemahaman materi, dua siswa kesulitan menemukan dan membuka tautan LKPD):
+
+- Kartu **"Kenali dulu"** sebelum Simulasi A dan B: arti kongruen dan sebangun dalam kalimat pendek, gambar contoh, dan cara cek 3 langkah. Angka contoh berbeda dari angka soal agar tidak membocorkan jawaban.
+- **Contekan** tabel kongruen dan sebangun di awal Latihan, dan tombol **"Butuh bantuan?"** di Aktivitas 1 dan setiap soal latihan. Isinya langkah mengerjakan, bukan kunci.
+- Simulasi menampilkan kalimat **Kesimpulan** (kongruen atau tidak, sebangun atau tidak). Misi simulasi menyebut apa yang diklik dan apa yang diperhatikan.
+- Pilihan jawaban syarat kongruen memakai kalimat biasa, bukan singkatan s.sd.s.
+- Bagian masuk: halaman pilihan "Aku belum punya akun / Aku sudah punya akun"; siswa boleh daftar dengan **nama pengguna** tanpa email; kata sandi siswa minimal 6 karakter; tombol **Lihat** kata sandi; kode kelas boleh diketik dengan huruf kecil atau spasi.
+- Dasbor guru menampilkan **tautan pendaftaran** (`/#/daftar/KODEKELAS`) dengan tombol Salin. Tempel tautan itu di RuangKelas: siswa yang membukanya langsung mendapat formulir dengan kode kelas terisi. Di bagian atas setiap halaman tertulis posisinya, misalnya "Bagian 5 dari 9 · Aktivitas 3 dari 5".
 
 Ukuran bangun Aktivitas 1: A segitiga siku-siku 3, 4, 5 cm; B segitiga sama kaki dengan alas 4 cm dan tinggi 3 cm; C adalah A diperbesar 1,5 kali; D kongruen dengan A. Keempatnya berwarna sama agar warna tidak membocorkan jawaban.
 
@@ -107,7 +116,7 @@ npm test
 npm run test:pg
 ```
 
-`npm test` menjalankan 25 uji dengan SQLite. `npm run test:pg` menjalankan 25 uji yang sama dengan PostgreSQL (butuh server Postgres lokal; atur `TEST_DATABASE_URL`). Yang diuji antara lain:
+`npm test` menjalankan 25 uji dengan SQLite (termasuk daftar dengan nama pengguna dan kode kelas berspasi). `npm run test:pg` menjalankan 25 uji yang sama dengan PostgreSQL (butuh server Postgres lokal; atur `TEST_DATABASE_URL`). Yang diuji antara lain:
 
 - pendaftaran guru tanpa kode, dengan kode salah, kode benar, undangan dipakai ulang, dan undangan dibatalkan;
 - batas 5 kode salah;

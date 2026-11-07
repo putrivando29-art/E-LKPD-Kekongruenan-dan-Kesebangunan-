@@ -183,7 +183,7 @@ export function problemFigure(root, kind) {
   root.appendChild(svg);
   const s = 0.75; // gambar soal diperkecil agar muat, skala sama untuk kedua bangun
   if (kind === 'soal1') {
-    svg.setAttribute('viewBox', `0 0 ${20 * S * s} ${9.2 * S * s}`);
+    svg.setAttribute('viewBox', `0 0 ${20 * S * s} ${9.9 * S * s}`);
     svg.setAttribute('aria-label', 'Segitiga ABC dan DEF. AB dan DE bertanda satu garis, BC dan EF dua garis, CA dan FD tiga garis.');
     const g = el('g', { transform: `scale(${s})` }, svg);
     const abc = triangleFromSides(5, 8, 7).map(p => ({ x: p.x + 1.5, y: p.y + 8.3 }));
@@ -220,5 +220,34 @@ export function problemFigure(root, kind) {
     };
     rect(1, 2.5, 6, 4, ['K', 'L', 'M', 'N'], 'shape-1');
     rect(9, 0.8, 9, 6, ['W', 'X', 'Y', 'Z'], 'shape-2');
+  }
+}
+
+// Gambar untuk kartu materi singkat. Angkanya sengaja berbeda dari soal agar tidak membocorkan jawaban.
+export function learnFigure(root, kind) {
+  const svg = el('svg', { class: 'problem-svg learn-svg', role: 'img' });
+  root.appendChild(svg);
+  const s = 0.75;
+  const g = el('g', { transform: `scale(${s})` }, svg);
+  if (kind === 'learn-congruent') {
+    svg.setAttribute('aria-label', 'Segitiga ABC bersisi 4, 5, 6 cm dan segitiga DEF yang sama persis tetapi diputar. Sisi yang sama panjang diberi tanda garis yang sama.');
+    const local = triangleFromSides(4, 6, 5); // A, B, C: AB = 4, AC = 6, BC = 5
+    const abc = local.map(p => ({ x: p.x + 1.5, y: p.y + 7 }));
+    labeledTriangle(g, abc, ['A', 'B', 'C'], 'shape-1', ['4 cm', '5 cm', '6 cm'], [1, 2, 3]);
+    const def = rigid(local, { theta: 150, t: { x: 12.5, y: 4.2 } });
+    labeledTriangle(g, def, ['D', 'E', 'F'], 'shape-2', ['4 cm', '5 cm', '6 cm'], [1, 2, 3]);
+    pill(g, 8.2 * S, 0.7 * S, 'diputar, ukuran tetap', { bgClass: 's-bg' });
+    svg.setAttribute('viewBox', `0 0 ${17 * S * s} ${8.6 * S * s}`);
+  }
+  if (kind === 'learn-similar') {
+    svg.setAttribute('aria-label', 'Segitiga kecil bersisi 2, 3, 4 cm dan segitiga besar bersisi 6, 9, 12 cm. Setiap sisi dikali 3.');
+    const small = triangleFromSides(4, 2, 3); // alas 4, sisi kiri 2, sisi kanan 3
+    const big = triangleFromSides(12, 6, 9);
+    const hBig = -Math.min(...big.map(p => p.y));
+    const base = hBig + 1.6;
+    labeledTriangle(g, small.map(p => ({ x: p.x + 1, y: p.y + base })), ['K', 'L', 'M'], 'shape-1', ['4 cm', '3 cm', '2 cm']);
+    labeledTriangle(g, big.map(p => ({ x: p.x + 7.2, y: p.y + base })), ['P', 'Q', 'R'], 'shape-2', ['12 cm', '9 cm', '6 cm']);
+    pill(g, 3 * S, 1 * S, 'semua sisi × 3', { bgClass: 's-bg' });
+    svg.setAttribute('viewBox', `0 0 ${20.5 * S * s} ${(base + 1.4) * S * s}`);
   }
 }

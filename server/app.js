@@ -131,24 +131,30 @@ function createApp(db, opts = {}) {
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  function readAccount(body) {
+  // Siswa boleh memakai email atau nama pengguna (lebih mudah diingat anak SMP); guru wajib email.
+  const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
+  function readAccount(body, { allowUsername = false, minPassword = 8 } = {}) {
     const name = String(body?.name || '').trim().replace(/\s+/g, ' ');
     const email = String(body?.email || '').trim().toLowerCase();
     const password = String(body?.password || '');
     const errors = {};
     if (name.length < 3 || name.length > 80 || !/\p{L}/u.test(name)) errors.name = 'Tulis nama lengkap (3 sampai 80 huruf).';
-    if (!EMAIL_RE.test(email) || email.length > 120) errors.email = 'Format email belum benar.';
-    if (password.length < 8 || password.length > 100) errors.password = 'Kata sandi minimal 8 karakter.';
+    if (email.includes('@') || !allowUsername) {
+      if (!EMAIL_RE.test(email) || email.length > 120) errors.email = allowUsername ? 'Format email belum benar. Atau pakai nama pengguna tanpa tanda @.' : 'Format email belum benar.';
+    } else if (!USERNAME_RE.test(email)) {
+      errors.email = 'Nama pengguna 3 sampai 30 karakter: huruf kecil, angka, titik, atau garis bawah. Tanpa spasi.';
+    }
+    if (password.length < minPassword || password.length > 100) errors.password = `Kata sandi minimal ${minPassword} karakter.`;
     return { name, email, password, errors };
   }
 
   app.post('/api/auth/register', async (req, res) => {
-    const { name, email, password, errors } = readAccount(req.body);
-    const code = String(req.body?.classCode || '').trim().toUpperCase();
+    const { name, email, password, errors } = readAccount(req.body, { allowUsername: true, minPassword: 6 });
+    const code = String(req.body?.classCode || '').replace(/\s+/g, '').toUpperCase();
     const cls = code ? await db.get('SELECT * FROM classes WHERE join_code = ?', code) : null;
     if (!cls) errors.classCode = 'Kode kelas tidak ditemukan. Minta kode kelas ke gurumu.';
     if (Object.keys(errors).length) throw new HttpError(400, 'Cek lagi isian pendaftaran.', { errors });
-    if (await db.get('SELECT 1 AS x FROM users WHERE email = ?', email)) throw new HttpError(409, 'Email ini sudah terdaftar. Silakan masuk.', { errors: { email: 'Email sudah terdaftar.' } });
+    if (await db.get('SELECT 1 AS x FROM users WHERE email = ?', email)) throw new HttpError(409, 'Email atau nama pengguna ini sudah dipakai. Kalau itu akunmu, silakan masuk.', { errors: { email: 'Sudah dipakai. Pilih nama pengguna lain, atau masuk.' } });
     const id = auth.newId();
     await db.tx(async t => {
       await t.run('INSERT INTO users (id, email, name, role, class_id, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -203,7 +209,7 @@ function createApp(db, opts = {}) {
     const u = await db.get('SELECT * FROM users WHERE email = ?', email);
     if (!u || !auth.verifyPassword(password, u.password_hash)) {
       await auth.recordFailure(db, key);
-      throw new HttpError(401, 'Email atau kata sandi salah.');
+      throw new HttpError(401, 'Email/nama pengguna atau kata sandi salah. Belum punya akun? Daftar dulu.', { code: 'bad_login' });
     }
     // Peran ditentukan oleh database. Pilihan tombol di halaman hanya dipakai untuk memberi pesan yang jelas.
     if (role && role !== u.role) {

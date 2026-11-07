@@ -54,8 +54,8 @@ const app = {
     const [page, a] = parts;
     try {
       if (!page) this.home();
-      else if (page === 'masuk') this.login(a === 'guru' ? 'guru' : 'siswa');
-      else if (page === 'daftar') this.register();
+      else if (page === 'masuk') this.login(a === 'guru' ? 'guru' : 'siswa', parts[2]);
+      else if (page === 'daftar') this.register(a || '');
       else if (page === 'daftar-guru') this.registerTeacher();
       else if (page === 'lkpd') await this.lkpd(a || 'petunjuk');
       else if (page === 'guru') await this.teacher(parts);
@@ -106,68 +106,124 @@ const app = {
       </div>`;
   },
 
-  login(role) {
+  // Halaman masuk. Untuk siswa: dua pilihan besar (belum punya akun / sudah punya akun) agar tidak salah jalan.
+  login(role, mode) {
     if (this.user) { location.hash = this.user.role === 'guru' ? '#/guru' : '#/lkpd/petunjuk'; return; }
+    if (role === 'siswa' && mode !== 'akun') {
+      view.innerHTML = `
+        <div class="auth">
+          <div class="card auth-card">
+            ${this.roleTabs(role)}
+            <h1 id="section-title" tabindex="-1">Halo! Kamu siswa, ya?</h1>
+            <p class="muted">Pilih salah satu:</p>
+            <div class="entry-choices">
+              <a class="entry-choice" href="#/daftar" data-accent="peach">
+                <span class="entry-num">1</span>
+                <span><b>Aku belum punya akun</b><span class="block">Daftar dulu pakai kode kelas dari gurumu. Cukup sekali.</span></span>
+              </a>
+              <a class="entry-choice" href="#/masuk/siswa/akun" data-accent="butter">
+                <span class="entry-num">2</span>
+                <span><b>Aku sudah punya akun</b><span class="block">Masuk dengan email atau nama pengguna dan kata sandimu.</span></span>
+              </a>
+            </div>
+            <div class="auth-alt"><p class="muted small">Lupa kata sandi? Minta gurumu mengatur ulang dari Dasbor Guru.</p></div>
+          </div>
+        </div>`;
+      return;
+    }
     view.innerHTML = `
       <div class="auth">
         <div class="card auth-card">
-          <div class="role-tabs" role="tablist" aria-label="Pilih peran">
-            <a role="tab" href="#/masuk/siswa" aria-selected="${role === 'siswa'}" class="${role === 'siswa' ? 'active' : ''}">Siswa</a>
-            <a role="tab" href="#/masuk/guru" aria-selected="${role === 'guru'}" class="${role === 'guru' ? 'active' : ''}">Guru</a>
-          </div>
+          ${this.roleTabs(role)}
           <h1 id="section-title" tabindex="-1">Masuk sebagai ${role === 'guru' ? 'Guru' : 'Siswa'}</h1>
           <form data-login novalidate>
-            <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
-            <label class="field"><span>Kata sandi</span><input name="password" type="password" autocomplete="current-password" required></label>
+            <label class="field"><span>${role === 'guru' ? 'Email' : 'Email atau nama pengguna'}</span><input name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+            ${this.passwordField('current-password', 'Kata sandi')}
             <p class="form-error" role="alert" hidden></p>
             <button class="btn btn-primary btn-large">Masuk</button>
           </form>
           <div class="auth-alt">
           ${role === 'siswa'
-            ? '<p>Belum punya akun? <a href="#/daftar">Daftar pakai kode kelas</a>.</p><p class="muted small">Lupa kata sandi? Minta gurumu mengatur ulang.</p>'
+            ? '<p>Belum punya akun? <a href="#/daftar">Daftar pakai kode kelas</a>.</p><p class="muted small">Lupa kata sandi? Minta gurumu mengatur ulang dari Dasbor Guru.</p>'
             : '<p>Guru baru? <a href="#/daftar-guru">Daftar pakai kode akses guru</a>.</p><p class="muted small">Kode akses diberikan oleh pengelola website atau guru lain lewat undangan. Akun guru tidak bisa dibuat tanpa kode itu.</p>'}
           </div>
         </div>
       </div>`;
     const form = view.querySelector('[data-login]');
+    this.bindPasswordToggle(form);
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const err = form.querySelector('.form-error');
       const email = form.elements.email.value.trim();
       const password = form.elements.password.value;
-      if (!email || !password) { err.textContent = 'Email dan kata sandi wajib diisi.'; err.hidden = false; return; }
-      const btn = form.querySelector('button');
+      if (!email || !password) { err.textContent = 'Isi dulu email/nama pengguna dan kata sandi.'; err.hidden = false; return; }
+      const btn = form.querySelector('button[type="submit"], button:not([type])');
       btn.disabled = true;
       try {
         const res = await api('/api/auth/login', { method: 'POST', body: { email, password, role } });
         this.setUser(res.user);
         location.hash = res.user.role === 'guru' ? '#/guru' : '#/lkpd/petunjuk';
       } catch (ex) {
-        err.textContent = ex.message;
+        err.innerHTML = esc(ex.message) + (ex.data?.code === 'bad_login' && role === 'siswa' ? ' <a href="#/daftar">Daftar di sini</a>.' : '');
         err.hidden = false;
         btn.disabled = false;
       }
     });
   },
 
-  accountForm({ title, intro, extra, submitText, endpoint, after }) {
+  roleTabs(role) {
+    return `
+      <div class="role-tabs" role="tablist" aria-label="Pilih peran">
+        <a role="tab" href="#/masuk/siswa" aria-selected="${role === 'siswa'}" class="${role === 'siswa' ? 'active' : ''}">Siswa</a>
+        <a role="tab" href="#/masuk/guru" aria-selected="${role === 'guru'}" class="${role === 'guru' ? 'active' : ''}">Guru</a>
+      </div>`;
+  },
+
+  passwordField(autocomplete, label) {
+    return `
+      <label class="field"><span>${label}</span>
+        <span class="pass-wrap"><input name="password" type="password" autocomplete="${autocomplete}" required><button type="button" class="btn btn-small btn-soft" data-toggle-pass aria-pressed="false">Lihat</button></span>
+        <small class="field-error" data-err="password"></small></label>`;
+  },
+
+  bindPasswordToggle(form) {
+    const b = form.querySelector('[data-toggle-pass]');
+    if (!b) return;
+    b.addEventListener('click', () => {
+      const inp = form.elements.password;
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      b.textContent = show ? 'Sembunyikan' : 'Lihat';
+      b.setAttribute('aria-pressed', String(show));
+    });
+  },
+
+  accountForm({ title, intro, steps, idLabel, idHint, passLabel, extra, submitText, endpoint, after }) {
     view.innerHTML = `
       <div class="auth">
         <div class="card auth-card">
           <h1 id="section-title" tabindex="-1">${title}</h1>
           <p class="muted">${intro}</p>
+          ${steps ? `<ol class="entry-steps">${steps.map(x => `<li>${x}</li>`).join('')}</ol>` : ''}
           <form data-account novalidate>
-            <label class="field"><span>Nama lengkap</span><input name="name" autocomplete="name" maxlength="80" required><small class="field-error" data-err="name"></small></label>
-            <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" maxlength="120" required><small class="field-error" data-err="email"></small></label>
-            <label class="field"><span>Kata sandi (minimal 8 karakter)</span><input name="password" type="password" autocomplete="new-password" minlength="8" required><small class="field-error" data-err="password"></small></label>
             ${extra}
+            <label class="field"><span>Nama lengkap</span><input name="name" autocomplete="name" maxlength="80" required><small class="field-error" data-err="name"></small></label>
+            <label class="field"><span>${idLabel}</span><input name="email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="120" required>${idHint ? `<small class="muted">${idHint}</small>` : ''}<small class="field-error" data-err="email"></small></label>
+            ${this.passwordField('new-password', passLabel)}
             <p class="form-error" role="alert" hidden></p>
-            <button class="btn btn-primary btn-large">${submitText}</button>
+            <button type="submit" class="btn btn-primary btn-large">${submitText}</button>
           </form>
-          <div class="auth-alt"><p>Sudah punya akun? <a href="#/masuk/${endpoint.includes('teacher') ? 'guru' : 'siswa'}">Masuk</a>.</p></div>
+          <div class="auth-alt"><p>Sudah punya akun? <a href="#/masuk/${endpoint.includes('teacher') ? 'guru' : 'siswa/akun'}">Masuk</a>.</p></div>
         </div>
       </div>`;
     const form = view.querySelector('[data-account]');
+    this.bindPasswordToggle(form);
+    // Pesan error sebuah kolom hilang begitu kolom itu diperbaiki.
+    form.addEventListener('input', e => {
+      const f = e.target.closest('.field')?.querySelector('.field-error');
+      if (f) f.textContent = '';
+      form.querySelector('.form-error').hidden = true;
+    });
     form.addEventListener('submit', async e => {
       e.preventDefault();
       form.querySelectorAll('.field-error').forEach(x => { x.textContent = ''; });
@@ -175,30 +231,36 @@ const app = {
       err.hidden = true;
       const body = {};
       for (const el of form.elements) if (el.name) body[el.name] = el.value;
-      const btn = form.querySelector('button');
+      const btn = form.querySelector('button[type="submit"]');
       btn.disabled = true;
       try {
         const res = await api(endpoint, { method: 'POST', body });
         this.setUser(res.user);
-        after(res.user);
+        after(res.user, body);
       } catch (ex) {
         for (const [k, v] of Object.entries(ex.data?.errors || {})) { const f = form.querySelector(`[data-err="${k}"]`); if (f) f.textContent = v; }
         err.textContent = ex.message;
         err.hidden = false;
         btn.disabled = false;
+        form.querySelector('.field-error:not(:empty)')?.closest('.field')?.querySelector('input')?.focus();
       }
     });
   },
 
-  register() {
+  register(prefill = '') {
     if (this.user) { location.hash = '#/'; return; }
+    const code = prefill.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12);
     this.accountForm({
       title: 'Daftar Akun Siswa',
-      intro: 'Minta kode kelas ke gurumu. Nama dan kelasmu akan tertulis di hasil LKPD.',
-      extra: '<label class="field"><span>Kode kelas</span><input name="classCode" autocomplete="off" maxlength="12" class="input-code" required><small class="field-error" data-err="classCode"></small></label>',
+      intro: 'Cukup sekali. Setelah itu kamu tinggal masuk.',
+      steps: code ? null : ['Minta <b>kode kelas</b> ke gurumu (6 huruf/angka).', 'Isi formulir di bawah.', 'Klik <b>Daftar dan mulai</b>.'],
+      idLabel: 'Email atau nama pengguna',
+      idHint: 'Tidak punya email? Buat nama pengguna yang mudah diingat, misalnya budi.8a. Huruf kecil, tanpa spasi.',
+      passLabel: 'Kata sandi (minimal 6 karakter)',
+      extra: `<label class="field"><span>Kode kelas</span><input name="classCode" autocomplete="off" maxlength="12" class="input-code" value="${esc(code)}" required>${code ? '<small class="muted">Kode kelas sudah terisi dari tautan gurumu.</small>' : ''}<small class="field-error" data-err="classCode"></small></label>`,
       submitText: 'Daftar dan mulai',
       endpoint: '/api/auth/register',
-      after: () => { toast('Akun berhasil dibuat.'); location.hash = '#/lkpd/petunjuk'; }
+      after: (u, body) => { toast(`Akun berhasil dibuat. Ingat ya: ${body.email.trim().toLowerCase()} dan kata sandimu.`); location.hash = '#/lkpd/petunjuk'; }
     });
   },
 
@@ -207,6 +269,8 @@ const app = {
     this.accountForm({
       title: 'Daftar Akun Guru',
       intro: 'Pendaftaran guru memerlukan kode akses guru atau kode undangan. Kode diperiksa di server.',
+      idLabel: 'Email',
+      passLabel: 'Kata sandi (minimal 8 karakter)',
       extra: '<label class="field"><span>Kode akses atau kode undangan guru</span><input name="accessCode" type="password" autocomplete="off" maxlength="80" required><small class="field-error" data-err="accessCode"></small></label>',
       submitText: 'Daftar sebagai guru',
       endpoint: '/api/auth/register-teacher',
@@ -265,7 +329,7 @@ const app = {
     const role = this.user?.role || 'siswa';
     this.user = null;
     toast('Sesi berakhir. Silakan masuk lagi. Jawaban yang belum terkirim tetap aman di perangkat ini.', 'error');
-    location.hash = `#/masuk/${role}`;
+    location.hash = role === 'siswa' ? '#/masuk/siswa/akun' : '#/masuk/guru';
     this.route();
   },
 
