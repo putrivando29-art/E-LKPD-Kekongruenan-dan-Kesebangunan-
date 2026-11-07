@@ -101,8 +101,8 @@ const SECTIONS = [
     help: 'Centang "Tampilkan panjang sisi dan sudut", lalu bandingkan angkanya. Kamu juga bisa menumpuk dua bangun di bagian "Bandingkan Bangun".',
     items: [
       { id: 'a1_q1', type: 'multi', label: 'Bangun mana yang bentuk dan ukurannya sama persis?', note: 'Boleh pilih lebih dari satu pasang.', options: PAIRS, required: true, auto: true, points: 2 },
-      { id: 'a1_q2', type: 'multi', label: 'Bangun mana yang bentuknya sama, tapi ukurannya beda?', note: 'Boleh pilih lebih dari satu pasang.', options: PAIRS, required: true, auto: true, points: 2 },
-      { id: 'a1_q3', type: 'text', label: 'Apa beda utama kedua jenis pasangan tadi?', hint: JAWAB, rows: 2, required: true, graded: 'teacher', points: 3 }
+      { id: 'a1_q2', type: 'multi', label: 'Bangun mana yang bentuknya sama, tapi ukurannya beda?', note: 'Jawabannya lebih dari satu pasang. Cek semua pasangan satu per satu, termasuk yang memakai D.', options: PAIRS, required: true, auto: true, points: 2 },
+      { id: 'a1_q3', type: 'text', label: 'Apa beda utama kedua jenis pasangan tadi?', note: 'Bandingkan pasangan nomor 1 dengan pasangan nomor 2: apa yang sama, apa yang beda?', hint: 'Mulai dengan: Pasangan A dan D bentuknya ... dan ukurannya ..., sedangkan pasangan A dan C ...', rows: 2, required: true, graded: 'teacher', points: 3 }
     ]
   },
   {
@@ -156,12 +156,13 @@ const SECTIONS = [
         },
         steps: [
           'Seret segitiga oranye (DEF) ke tempat lain. Lihat kotak hasil di bawah: apakah sisinya masih sama?',
-          'Klik Putar, lalu klik Cerminkan. Apakah ukurannya berubah?',
+          'Klik "Putar ke kanan" beberapa kali. Memutar hanya mengubah arah, seperti memutar buku di meja. Apakah panjang sisinya berubah?',
+          'Klik "Balik". Segitiga dibalik seperti bayangan di cermin. Ukurannya berubah atau tidak?',
           'Klik "Bandingkan Bangun". DEF akan ditumpuk ke ABC. Pas atau tidak?',
           'Geser penggeser EF supaya sisinya lebih panjang. Masih kongruen? Lalu klik Catat Hasil.'
         ],
         items: [
-          { id: 'simA_log', type: 'simlog', sim: 'congruence', label: 'Catatan percobaanmu', required: true, minEntries: 1, graded: 'none' },
+          { id: 'simA_log', type: 'simlog', sim: 'congruence', label: 'Catatan percobaanmu', note: 'Geser, putar, balik, atau ubah sisi DEF dulu, baru klik Catat Hasil.', required: true, minEntries: 1, need: 'changed', graded: 'none' },
           { id: 'a3a_q3', type: 'single', label: 'Kalau satu sisi DEF diperpanjang, apakah DEF masih kongruen dengan ABC?', options: YA_TIDAK, required: true, auto: true, points: 1 }
         ]
       },
@@ -176,7 +177,8 @@ const SECTIONS = [
             'Sebangun artinya bentuknya SAMA, tapi ukurannya boleh beda.',
             'Seperti foto yang diperbesar: gambarnya sama, hanya lebih besar.',
             'Semua sisi dikali angka yang sama. Angka itu disebut faktor skala (k).',
-            'Besar sudutnya tidak berubah.'
+            'Besar sudutnya tidak berubah.',
+            'Ingat: sisi bangun sebangun BOLEH beda, BOLEH juga sama. Kalau k = 1, sisinya sama persis. Jadi bangun yang kongruen juga termasuk sebangun.'
           ],
           stepsTitle: 'Contoh: segitiga 2, 3, 4 cm dan 6, 9, 12 cm',
           steps: [
@@ -192,9 +194,9 @@ const SECTIONS = [
           'Pilih "Ubah sisi sendiri", lalu ubah satu sisi saja. Masih sebangun? Lalu klik Catat Hasil.'
         ],
         items: [
-          { id: 'simB_log', type: 'simlog', sim: 'similarity', label: 'Catatan percobaanmu', required: true, minEntries: 1, graded: 'none' },
+          { id: 'simB_log', type: 'simlog', sim: 'similarity', label: 'Catatan percobaanmu', note: 'Ubah k dulu (misalnya klik k = 2), baru klik Catat Hasil.', required: true, minEntries: 1, need: 'scaled', graded: 'none' },
           { id: 'a3b_q2', type: 'single', label: 'Kalau semua sisi diperbesar dengan faktor yang sama, apakah bentuk segitiga berubah?', options: [{ value: 'berubah', label: 'Bentuknya berubah' }, { value: 'tetap', label: 'Bentuknya tetap' }], required: true, auto: true, points: 1 },
-          { id: 'a3b_q4_pq', type: 'ratio', label: 'PQR bersisi 3, 4, 5 cm. STU bersisi 6, 8, 10 cm. Perbandingan PQ : ST =', hint: 'misal 2 : 3', required: true, auto: true, points: 1 }
+          { id: 'a3b_q4_pq', type: 'ratio', label: 'PQR bersisi 3, 4, 5 cm. STU bersisi 6, 8, 10 cm. Perbandingan PQ : ST =', note: 'PQ berpasangan dengan ST. Tulis panjang PQ, titik dua, lalu panjang ST. Boleh disederhanakan.', hint: 'PQ : ST', help: 'PQ panjangnya 3 cm dan ST panjangnya 6 cm. Tulis dengan urutan yang sama: angka PQ dulu, baru angka ST. Kalau bisa, bagi kedua angka dengan bilangan yang sama.', required: true, auto: true, points: 1 }
         ]
       }
     ]
@@ -238,7 +240,7 @@ const SECTIONS = [
             { value: 'asa', label: 'Dua pasang sudut dan sisi di antaranya sama (sudut, sisi, sudut)' },
             { value: 'aaa', label: 'Ketiga pasang sudutnya sama besar (sudut, sudut, sudut)' }
           ], required: true, auto: true, points: 1 },
-          { id: 's1b', type: 'text', label: 'c. Apa alasanmu?', hint: ALASAN, rows: 2, required: true, graded: 'teacher', points: 2 }
+          { id: 's1b', type: 'text', label: 'c. Apa alasanmu? Pakai panjang sisi di soal, bukan kata "rumus".', hint: 'Mulai dengan: Karena AB = DE = 5 cm, BC = EF = ..., dan CA = FD = ..., jadi ...', rows: 2, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
@@ -254,13 +256,13 @@ const SECTIONS = [
         items: [
           { id: 's2a', type: 'single', label: 'a. Apakah segitiga PQR dan STU sebangun?', options: YA_TIDAK, required: true, auto: true, points: 1 },
           { id: 's2c', type: 'number', label: 'b. Faktor skala dari PQR ke STU, k =', hint: 'tulis angka', required: true, auto: true, points: 1 },
-          { id: 's2d', type: 'text', label: 'c. Apa alasanmu, dilihat dari perbandingan sisi?', hint: ALASAN, rows: 2, required: true, graded: 'teacher', points: 2 }
+          { id: 's2d', type: 'text', label: 'c. Apa alasanmu? Tulis hasil bagi tiap pasang sisi.', hint: 'Mulai dengan: ST : PQ = 6 : 3 = ..., TU : QR = ..., SU : PR = ..., jadi ...', rows: 2, required: true, graded: 'teacher', points: 2 }
         ]
       },
       {
         id: 'soal3',
         title: 'Soal 3: Benar atau salah?',
-        help: 'Lihat contekan di atas. Kongruen: bentuk dan ukuran sama. Sebangun: bentuk sama, ukuran boleh beda.',
+        help: 'Lihat contekan di atas. Coba pakai contoh: segitiga 3, 4, 5 cm dan 6, 8, 10 cm sudutnya sama besar dan bentuknya sama. Apakah ukurannya juga sama?',
         items: [
           { id: 's4_1', type: 'single', label: '1) Dua bangun yang kongruen pasti sebangun.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
           { id: 's4_2', type: 'single', label: '2) Dua bangun yang sebangun pasti kongruen.', options: BENAR_SALAH, required: true, auto: true, points: 1 },
@@ -277,7 +279,7 @@ const SECTIONS = [
         ],
         items: [
           { id: 's7', type: 'number', label: 'Panjang foto baru = ... cm', unit: 'cm', hint: 'tulis angka', required: true, auto: true, points: 2 },
-          { id: 's7_langkah', type: 'text', label: 'Tulis cara menghitungnya.', hint: LANGKAH, rows: 2, required: true, graded: 'teacher', points: 3 }
+          { id: 's7_langkah', type: 'text', label: 'Tulis langkah hitunganmu untuk foto ini (angka dan tanda hitungnya), bukan contoh soal baru.', hint: 'Mulai dengan: Faktor skala = 10 : 4 = ..., lalu panjang baru = 6 × ... = ...', rows: 2, required: true, graded: 'teacher', points: 3 }
         ]
       }
     ]
@@ -307,8 +309,8 @@ const SECTIONS = [
     icon: 'heart',
     intro: 'Ceritakan pengalaman belajarmu. Tidak ada jawaban benar atau salah.',
     items: [
-      { id: 'r1', type: 'text', label: 'Bagian mana yang paling kamu pahami?', hint: 'Ceritakan di sini...', rows: 2, required: true, graded: 'none' },
-      { id: 'r2', type: 'text', label: 'Bagian mana yang masih membingungkan?', hint: 'Ceritakan di sini...', rows: 2, required: true, graded: 'none' }
+      { id: 'r1', type: 'text', label: 'Bagian mana yang paling kamu pahami? Sebut nama bagiannya dan alasannya.', note: 'Contoh nama bagian: Mengamati, Simulasi A (Kongruen), Simulasi B (Sebangun), Latihan Soal 2, Menalar.', hint: 'Aku paling paham bagian ... karena ...', rows: 2, required: true, graded: 'none' },
+      { id: 'r2', type: 'text', label: 'Bagian mana yang masih membingungkan? Sebut nama bagiannya dan apa yang bikin bingung.', hint: 'Aku masih bingung di bagian ... karena ...', rows: 2, required: true, graded: 'none' }
     ]
   }
 ];

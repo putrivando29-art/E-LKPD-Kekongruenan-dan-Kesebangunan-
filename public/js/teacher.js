@@ -168,7 +168,7 @@ function answerHtml(it, v) {
     case 'simlog': {
       if (!Array.isArray(v) || !v.length) return '<p class="answer empty">(belum ada catatan)</p>';
       if (it.sim === 'congruence') {
-        return `<div class="table-scroll"><table class="data-table compact"><thead><tr><th>No</th><th>DE; EF; FD (cm)</th><th>∠D; ∠E; ∠F</th><th>Keadaan</th><th>Catatan</th></tr></thead><tbody>${v.map((e, i) => `<tr><td>${i + 1}</td><td>${fmt(e.de)}; ${fmt(e.ef)}; ${fmt(e.fd)}</td><td>${fmt(e.aD)}°; ${fmt(e.aE)}°; ${fmt(e.aF)}°</td><td>${[e.moved ? 'digeser' : '', `diputar ${fmt(e.rot, 0)}°`, e.mirror ? 'dicerminkan' : ''].filter(Boolean).join(', ')}</td><td>${esc(e.note || '-')}</td></tr>`).join('')}</tbody></table></div>`;
+        return `<div class="table-scroll"><table class="data-table compact"><thead><tr><th>No</th><th>DE; EF; FD (cm)</th><th>∠D; ∠E; ∠F</th><th>Keadaan</th><th>Catatan</th></tr></thead><tbody>${v.map((e, i) => `<tr><td>${i + 1}</td><td>${fmt(e.de)}; ${fmt(e.ef)}; ${fmt(e.fd)}</td><td>${fmt(e.aD)}°; ${fmt(e.aE)}°; ${fmt(e.aF)}°</td><td>${[e.moved ? 'digeser' : '', `diputar ${fmt(e.rot, 0)}°`, e.mirror ? 'dibalik' : ''].filter(Boolean).join(', ')}</td><td>${esc(e.note || '-')}</td></tr>`).join('')}</tbody></table></div>`;
       }
       return `<div class="table-scroll"><table class="data-table compact"><thead><tr><th>No</th><th>Mode</th><th>ST; TU; SU (cm)</th><th>∠S; ∠T; ∠U</th><th>Catatan</th></tr></thead><tbody>${v.map((e, i) => `<tr><td>${i + 1}</td><td>${e.mode === 'skala' ? `k = ${fmt(e.k)}` : 'sisi bebas'}</td><td>${fmt(e.st)}; ${fmt(e.tu)}; ${fmt(e.su)}</td><td>${fmt(e.aS)}°; ${fmt(e.aT)}°; ${fmt(e.aU)}°</td><td>${esc(e.note || '-')}</td></tr>`).join('')}</tbody></table></div>`;
     }

@@ -13,8 +13,8 @@ export function createCongruenceSim(root, { onRecord, canRecord = () => true }) 
   const narrow = root.clientWidth > 0 && root.clientWidth < 560;
   const W = narrow ? 13 : 24, H = narrow ? 23 : 14;  // baris terbawah untuk penggaris
   const START = () => (narrow
-    ? { de: 5, ef: 7, fd: 8, theta: 25, mirror: false, tx: 6.5, ty: 16.6 }
-    : { de: 5, ef: 7, fd: 8, theta: 25, mirror: false, tx: 17, ty: 6.6 });
+    ? { de: 5, ef: 7, fd: 8, theta: 0, mirror: false, tx: 6.5, ty: 16.6 }
+    : { de: 5, ef: 7, fd: 8, theta: 0, mirror: false, tx: 17, ty: 6.6 });
   let st = START();          // keadaan tujuan (dipakai untuk semua ukuran)
   let view = { ...st };      // keadaan yang sedang digambar (dapat berupa tahap animasi)
   let moved = false, snapped = false, stopTween = () => {};
@@ -23,15 +23,15 @@ export function createCongruenceSim(root, { onRecord, canRecord = () => true }) 
 
   root.innerHTML = `
     <div class="sim-toolbar" role="group" aria-label="Alat Simulasi A">
-      <button type="button" class="btn btn-small btn-soft" data-act="rotL">Putar −15°</button>
-      <button type="button" class="btn btn-small btn-soft" data-act="rotR">Putar +15°</button>
-      <button type="button" class="btn btn-small btn-soft" data-act="mirror">Cerminkan</button>
+      <button type="button" class="btn btn-small btn-soft" data-act="rotL">Putar ke kiri</button>
+      <button type="button" class="btn btn-small btn-soft" data-act="rotR">Putar ke kanan</button>
+      <button type="button" class="btn btn-small btn-soft" data-act="mirror">Balik</button>
       <button type="button" class="btn btn-small btn-primary" data-act="snap">Bandingkan Bangun</button>
       <button type="button" class="btn btn-small btn-quiet" data-act="reset">Atur Ulang</button>
       <label class="check-inline"><input type="checkbox" data-opt="angles" checked> Tampilkan sudut</label>
     </div>
     <div class="sim-stage"><svg class="sim-svg" viewBox="0 0 ${W * S} ${H * S}" role="img" aria-label="Segitiga ABC dan segitiga DEF pada kotak 1 cm"></svg></div>
-    <p class="sim-hint">Seret segitiga oranye untuk menggeser. Seret titik kuning untuk memutar. Pakai papan ketik: pilih segitiganya lalu tekan tombol panah.</p>
+    <p class="sim-hint">Seret segitiga oranye untuk menggeser. Tombol Putar dan Balik hanya mengubah arah segitiga, seperti memutar atau membalik kertas: panjang sisinya tidak berubah. Papan ketik: pilih segitiganya lalu tekan tombol panah.</p>
     <fieldset class="sim-sliders">
       <legend>Ubah panjang sisi DEF (cm)</legend>
       <label>DE <input type="range" min="2" max="10" step="0.5" data-side="de"><output data-out="de"></output></label>
@@ -124,7 +124,7 @@ export function createCongruenceSim(root, { onRecord, canRecord = () => true }) 
       return `<tr><th scope="row">${n}</th><td>${fmt(v1)}${unit}</td><td>${fmt(v2)}${unit}</td><td class="${eq ? 'eq' : 'neq'}">${eq ? 'Sama' : 'Beda'}</td></tr>`;
     }).join('');
     const rot = ((st.theta % 360) + 360) % 360;
-    const pos = [moved ? 'digeser' : null, `diputar ${fmt(rot, 0)}°`, st.mirror ? 'dicerminkan' : null].filter(Boolean).join(', ');
+    const pos = [moved ? 'digeser' : null, `diputar ${fmt(rot, 0)}°`, st.mirror ? 'dibalik' : null].filter(Boolean).join(', ');
     let note;
     if (sideEq === 3 && angEq === 3) note = snapped ? 'DEF menutupi ABC dengan pas. Semua titik dan sisi berimpit.' : 'Posisi dan arah DEF berbeda, tapi semua pasangan sisi dan sudut tetap sama. Coba klik "Bandingkan Bangun".';
     else note = snapped ? `DEF tidak pas menutupi ABC. Ada ${3 - sideEq} pasang sisi dan ${3 - angEq} pasang sudut yang beda.` : `Ada ${3 - sideEq} pasang sisi dan ${3 - angEq} pasang sudut yang beda.`;
@@ -234,8 +234,8 @@ export function createCongruenceSim(root, { onRecord, canRecord = () => true }) 
   root.addEventListener('click', e => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (!act) return;
-    if (act === 'rotL') go({ ...st, ...valid, theta: st.theta - 15 });
-    if (act === 'rotR') go({ ...st, ...valid, theta: st.theta + 15 });
+    if (act === 'rotL') go({ ...st, ...valid, theta: st.theta - 30 });
+    if (act === 'rotR') go({ ...st, ...valid, theta: st.theta + 30 });
     if (act === 'mirror') go({ ...st, ...valid, mirror: !st.mirror });
     if (act === 'snap') snap();
     if (act === 'reset') { moved = false; warn.hidden = true; valid = { de: 5, ef: 7, fd: 8 }; go(START()); }

@@ -443,6 +443,7 @@ export class Workspace {
           </div>
         </div>
         <div class="q-body">
+          ${it.help ? this.helpHtml(it.help) : ''}
           ${input}
           <p class="q-error" role="alert" hidden></p>
           <div class="q-feedback" hidden></div>
@@ -456,7 +457,7 @@ export class Workspace {
     if (!entries.length) return `<p class="muted small">Belum ada catatan. Klik "Catat Hasil" di simulasi (perlu ${it.minEntries} catatan).</p>`;
     const rows = entries.map((e, i) => {
       const desc = it.sim === 'congruence'
-        ? `DEF: ${fmt(e.de)}; ${fmt(e.ef)}; ${fmt(e.fd)} cm. Sudut D, E, F: ${fmt(e.aD)}°, ${fmt(e.aE)}°, ${fmt(e.aF)}°. ${[e.moved ? 'digeser' : '', `diputar ${fmt(e.rot, 0)}°`, e.mirror ? 'dicerminkan' : ''].filter(Boolean).join(', ')}`
+        ? `DEF: ${fmt(e.de)}; ${fmt(e.ef)}; ${fmt(e.fd)} cm. Sudut D, E, F: ${fmt(e.aD)}°, ${fmt(e.aE)}°, ${fmt(e.aF)}°. ${[e.moved ? 'digeser' : '', `diputar ${fmt(e.rot, 0)}°`, e.mirror ? 'dibalik' : ''].filter(Boolean).join(', ')}`
         : `${e.mode === 'skala' ? `k = ${fmt(e.k)}` : 'sisi bebas'}. STU: ${fmt(e.st)}; ${fmt(e.tu)}; ${fmt(e.su)} cm. Sudut S, T, U: ${fmt(e.aS)}°, ${fmt(e.aT)}°, ${fmt(e.aU)}°`;
       return `<li><span>${i + 1}. ${esc(desc)}${e.note ? `. Catatan: ${esc(e.note)}` : ''}</span>${locked ? '' : `<button type="button" class="btn btn-small btn-quiet" data-del="${i}" aria-label="Hapus catatan ${i + 1}">Hapus</button>`}</li>`;
     }).join('');

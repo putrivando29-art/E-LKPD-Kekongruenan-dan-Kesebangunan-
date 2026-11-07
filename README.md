@@ -72,6 +72,16 @@ Revisi dari uji coba siswa (angket RuangKelas, 6 November 2026: dua siswa menyeb
 - Bagian masuk: halaman pilihan "Aku belum punya akun / Aku sudah punya akun"; siswa boleh daftar dengan **nama pengguna** tanpa email; kata sandi siswa minimal 6 karakter; tombol **Lihat** kata sandi; kode kelas boleh diketik dengan huruf kecil atau spasi.
 - Dasbor guru menampilkan **tautan pendaftaran** (`/#/daftar/KODEKELAS`) dengan tombol Salin. Tempel tautan itu di RuangKelas: siswa yang membukanya langsung mendapat formulir dengan kode kelas terisi. Di bagian atas setiap halaman tertulis posisinya, misalnya "Bagian 5 dari 9 · Aktivitas 3 dari 5".
 
+Revisi dari jawaban tiga siswa uji coba di LKPD (dikumpulkan 2 November 2026):
+
+- Kolom alasan dan langkah sering diisi tanpa alasan matematis (misalnya merujuk ke video atau menulis contoh soal baru). Sekarang kolom itu memuat kalimat pembuka dan judul yang menyebut bentuk jawaban yang diminta.
+- Perbandingan PQ : ST dijawab dengan urutan atau angka yang keliru. Sekarang ada penjelasan urutan pasangan dan tombol bantuan di soal itu.
+- Dua siswa hanya memilih satu pasangan di Aktivitas 1 nomor 2. Petunjuknya kini menyebut bahwa jawabannya lebih dari satu pasang.
+- Bagian memutar segitiga membingungkan. Tombol menjadi Putar ke kiri, Putar ke kanan (30 derajat), dan Balik, dengan penjelasan bahwa memutar dan membalik tidak mengubah panjang sisi. DEF mulai tanpa diputar.
+- Catatan simulasi yang hanya berisi keadaan awal (DEF belum diubah, atau k = 1) tidak lagi dihitung terisi.
+- Ada salah konsep "sisi bangun sebangun tidak boleh sama". Kartu materi sebangun kini menyebut sisi boleh beda atau sama, dan kongruen termasuk sebangun dengan k = 1.
+- Refleksi menyebut bagian yang tidak ada. Pertanyaan refleksi kini meminta nama bagian dan alasannya, dengan contoh nama bagian.
+
 Ukuran bangun Aktivitas 1: A segitiga siku-siku 3, 4, 5 cm; B segitiga sama kaki dengan alas 4 cm dan tinggi 3 cm; C adalah A diperbesar 1,5 kali; D kongruen dengan A. Keempatnya berwarna sama agar warna tidak membocorkan jawaban.
 
 Simulasi menghitung panjang sisi dan sudut dari koordinat setelah digeser, diputar, atau dicerminkan. Animasi hanya untuk gambar; tabel ukuran selalu memakai keadaan akhir. Di layar di bawah 560 px, bidang simulasi disusun tegak agar label tetap terbaca.
@@ -116,7 +126,7 @@ npm test
 npm run test:pg
 ```
 
-`npm test` menjalankan 25 uji dengan SQLite (termasuk daftar dengan nama pengguna dan kode kelas berspasi). `npm run test:pg` menjalankan 25 uji yang sama dengan PostgreSQL (butuh server Postgres lokal; atur `TEST_DATABASE_URL`). Yang diuji antara lain:
+`npm test` menjalankan 26 uji dengan SQLite (termasuk daftar dengan nama pengguna dan kode kelas berspasi). `npm run test:pg` menjalankan 26 uji yang sama dengan PostgreSQL (butuh server Postgres lokal; atur `TEST_DATABASE_URL`). Yang diuji antara lain:
 
 - pendaftaran guru tanpa kode, dengan kode salah, kode benar, undangan dipakai ulang, dan undangan dibatalkan;
 - batas 5 kode salah;

@@ -47,3 +47,18 @@ test('data simulasi ditolak bila bukan angka', () => {
   const bad = G.sanitize('simB_log', [{ mode: 'skala', k: 2, pq: '<script>' }]);
   assert.equal(bad.ok, false);
 });
+
+test('catatan simulasi harus berisi percobaan, bukan keadaan awal saja', () => {
+  const { ITEMS } = require('../server/lkpd');
+  const a = ITEMS.get('simA_log'), b = ITEMS.get('simB_log');
+  const awalA = { ab: 5, bc: 7, ca: 8, de: 5, ef: 7, fd: 8, rot: 0, mirror: false, moved: false };
+  assert.equal(G.isFilled(a, [awalA]), false, 'DEF belum diubah');
+  assert.equal(G.isFilled(a, [{ ...awalA, rot: 360 }]), false, 'diputar satu putaran penuh sama dengan awal');
+  assert.equal(G.isFilled(a, [{ ...awalA, moved: true }]), true);
+  assert.equal(G.isFilled(a, [{ ...awalA, rot: 30 }]), true);
+  assert.equal(G.isFilled(a, [{ ...awalA, ef: 9 }]), true);
+  const awalB = { mode: 'skala', k: 1 };
+  assert.equal(G.isFilled(b, [awalB]), false, 'k masih 1');
+  assert.equal(G.isFilled(b, [awalB, { mode: 'skala', k: 2 }]), true);
+  assert.equal(G.isFilled(b, [{ mode: 'bebas', k: null }]), true);
+});

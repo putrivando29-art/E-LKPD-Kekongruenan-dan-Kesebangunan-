@@ -103,7 +103,14 @@ export function isFilled(item, value) {
     case 'multi': return Array.isArray(value) && value.length > 0;
     case 'number': return num(value) !== null;
     case 'ratio': return ratio(value) !== null;
-    case 'simlog': return Array.isArray(value) && value.length >= (item.minEntries || 1);
+    case 'simlog': {
+      if (!Array.isArray(value) || value.length < (item.minEntries || 1)) return false;
+      // Sama dengan server/grading.js: catatan harus berisi percobaan, bukan keadaan awal saja.
+      const turned = r => { const a = ((r % 360) + 360) % 360; return a > 0.5 && a < 359.5; };
+      if (item.need === 'changed') return value.some(e => e && (e.moved || e.mirror || turned(e.rot) || Math.abs(e.de - 5) > 0.01 || Math.abs(e.ef - 7) > 0.01 || Math.abs(e.fd - 8) > 0.01));
+      if (item.need === 'scaled') return value.some(e => e && (e.mode === 'bebas' || (typeof e.k === 'number' && Math.abs(e.k - 1) > 0.001)));
+      return true;
+    }
     default: return false;
   }
 }
@@ -114,7 +121,9 @@ export function fillHint(item, value) {
     case 'text': return 'Tulis minimal 3 huruf';
     case 'number': return 'Tulis angka, misal 7,5';
     case 'ratio': return 'Tulis perbandingan, misal 2 : 3';
-    case 'simlog': return `Perlu ${item.minEntries} catatan, baru ada ${value.length}`;
+    case 'simlog': return value.length >= (item.minEntries || 1)
+      ? (item.need === 'scaled' ? 'Ubah k dulu (bukan 1), lalu catat' : 'Ubah DEF dulu, lalu catat')
+      : `Perlu ${item.minEntries} catatan, baru ada ${value.length}`;
     default: return 'Belum diisi';
   }
 }

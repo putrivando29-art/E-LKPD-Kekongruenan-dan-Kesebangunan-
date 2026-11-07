@@ -87,9 +87,21 @@ function isFilled(item, value) {
     case 'multi': return Array.isArray(value) && value.length > 0;
     case 'number': return parseNumber(value) !== null;
     case 'ratio': return parseRatio(value) !== null;
-    case 'simlog': return Array.isArray(value) && value.length >= (item.minEntries || 1);
+    case 'simlog': return Array.isArray(value) && value.length >= (item.minEntries || 1) && simlogHasChange(item, value);
     default: return false;
   }
+}
+
+// Catatan simulasi baru dihitung bila siswa benar-benar mencoba sesuatu, bukan hanya mencatat keadaan awal.
+// congruence: DEF digeser, diputar, dibalik, atau sisinya diubah. similarity: k bukan 1, atau sisi diubah sendiri.
+function simlogHasChange(item, entries) {
+  const turned = r => { const a = ((r % 360) + 360) % 360; return a > 0.5 && a < 359.5; };
+  if (item.need === 'changed') {
+    return entries.some(e => e && (e.moved || e.mirror || turned(e.rot)
+      || Math.abs(e.de - 5) > 0.01 || Math.abs(e.ef - 7) > 0.01 || Math.abs(e.fd - 8) > 0.01));
+  }
+  if (item.need === 'scaled') return entries.some(e => e && (e.mode === 'bebas' || (typeof e.k === 'number' && Math.abs(e.k - 1) > 0.001)));
+  return true;
 }
 
 // Pesan untuk kolom yang terisi tetapi belum memenuhi syarat (misalnya isian bilangan tidak terbaca).
@@ -99,7 +111,9 @@ function fillHint(item, value) {
     case 'text': return 'minimal 3 huruf atau angka';
     case 'number': return 'tuliskan sebuah bilangan, misalnya 7,5';
     case 'ratio': return 'tuliskan perbandingan, misalnya 2 : 3';
-    case 'simlog': return `minimal ${item.minEntries} catatan percobaan`;
+    case 'simlog': return Array.isArray(value) && value.length >= (item.minEntries || 1)
+      ? (item.need === 'scaled' ? 'catat percobaan dengan k selain 1' : 'catat percobaan setelah DEF diubah')
+      : `minimal ${item.minEntries} catatan percobaan`;
     default: return 'belum diisi';
   }
 }
@@ -228,6 +242,6 @@ function sectionFeedback(sectionId, answers, withKey) {
 }
 
 module.exports = {
-  parseNumber, parseRatio, isCorrect, isFilled, meaningfulText, sanitize,
+  simlogHasChange, parseNumber, parseRatio, isCorrect, isFilled, meaningfulText, sanitize,
   sectionProgress, autoScore, manualMax, sectionFeedback, autoItems
 };

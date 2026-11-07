@@ -118,7 +118,7 @@ function buildPdf({ user, cls, sub, progress, totals, showKey, showGrades, teach
       table(['No', 'Sisi ABC (AB, BC, CA)', 'Sisi DEF (DE, EF, FD)', 'Sudut D, E, F', 'Keadaan DEF'],
         entries.map((e, i) => [i + 1, `${fmtNum(e.ab)}; ${fmtNum(e.bc)}; ${fmtNum(e.ca)} cm`, `${fmtNum(e.de)}; ${fmtNum(e.ef)}; ${fmtNum(e.fd)} cm`,
           `${fmtNum(e.aD)}°; ${fmtNum(e.aE)}°; ${fmtNum(e.aF)}°`,
-          [`diputar ${fmtNum(e.rot)}°`, e.mirror ? 'dicerminkan' : null, e.moved ? 'digeser' : null].filter(Boolean).join(', ') + (e.note ? `. Catatan: ${e.note}` : '')]), w);
+          [`diputar ${fmtNum(e.rot)}°`, e.mirror ? 'dibalik' : null, e.moved ? 'digeser' : null].filter(Boolean).join(', ') + (e.note ? `. Catatan: ${e.note}` : '')]), w);
     } else {
       const w = [22, 70, 90, 90, 110, W - 382];
       table(['No', 'Mode, k', 'Sisi STU (ST, TU, SU)', 'ST:PQ, TU:QR, SU:PR', 'Sudut S, T, U', 'Catatan'],
