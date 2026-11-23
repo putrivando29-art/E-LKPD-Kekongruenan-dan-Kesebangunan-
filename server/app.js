@@ -22,6 +22,21 @@ function envTeacherCode() {
   return c.length >= 8 ? c : null;
 }
 
+// Penjelasan singkat penyebab gagal tersambung ke database, untuk pengelola website.
+// Tidak pernah memuat alamat atau kata sandi database.
+function describeDbError(e) {
+  const msg = String(e?.message || '');
+  const code = e?.code || '';
+  if (code === '28P01' || /password authentication failed/i.test(msg)) return 'kata sandi database di DATABASE_URL salah';
+  if (/tenant or user not found/i.test(msg)) return 'nama pengguna atau alamat pooler di DATABASE_URL tidak cocok dengan proyek Supabase';
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'alamat host database tidak ditemukan';
+  if (['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET'].includes(code) || /timeout|terminated/i.test(msg)) return 'koneksi ke database terputus atau terlalu lama';
+  if (/certificate|self.signed|SSL/i.test(msg)) return 'masalah sertifikat SSL';
+  if (/max client|too many|remaining connection slots/i.test(msg)) return 'koneksi database sedang penuh';
+  if (code === '3D000') return 'nama database di DATABASE_URL tidak ada';
+  return `kode ${code || 'tidak diketahui'}`;
+}
+
 function createApp(db, opts = {}) {
   const secureCookie = !!opts.secureCookie;
   const app = express();
@@ -43,8 +58,8 @@ function createApp(db, opts = {}) {
     if (req.method !== 'GET' && req.get('X-ELKPD') !== '1') return next(new HttpError(403, 'Permintaan ditolak.'));
     try {
       await db.ready;
-    } catch {
-      return next(new HttpError(503, 'Database belum dapat dihubungi. Hubungi pengelola website.'));
+    } catch (e) {
+      return next(new HttpError(503, `Database belum dapat dihubungi (${describeDbError(e)}). Hubungi pengelola website.`));
     }
     req.user = await auth.userFromRequest(db, req);
     next();

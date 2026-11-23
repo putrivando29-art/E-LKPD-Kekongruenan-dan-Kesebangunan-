@@ -109,7 +109,7 @@ function openPg(url) {
   const ssl = local ? false : process.env.DATABASE_CA_CERT
     ? { ca: process.env.DATABASE_CA_CERT.replace(/\\n/g, '\n'), rejectUnauthorized: true }
     : { rejectUnauthorized: false };
-  const pool = new Pool({ connectionString: u.toString(), ssl, max: Number(process.env.DATABASE_POOL_MAX) || 3, idleTimeoutMillis: 10000 });
+  const pool = new Pool({ connectionString: u.toString(), ssl, max: Number(process.env.DATABASE_POOL_MAX) || 3, idleTimeoutMillis: 10000, connectionTimeoutMillis: 10000 });
   pool.on('error', e => console.error('Koneksi database terputus:', e.message));
 
   const bind = q => ({
@@ -137,11 +137,36 @@ function openPg(url) {
     },
     close: () => pool.end()
   };
-  // Beberapa instance Vercel dapat mulai bersamaan; kunci advisory mencegah pembuatan tabel ganda.
-  db.ready = (async () => {
-    await pool.query(`BEGIN; SELECT pg_advisory_xact_lock(820814); ${schema(true)} ${PG_LOCKDOWN} COMMIT;`);
-  })();
-  db.ready.catch(e => console.error('Gagal menyiapkan tabel database:', e.message));
+  // Persiapan tabel. Beberapa instance Vercel dapat mulai bersamaan; kunci advisory mencegah pembuatan tabel ganda.
+  // Bila gagal (misalnya database sedang dijeda), persiapan dicoba lagi pada permintaan berikutnya, sehingga
+  // instance yang sudah berjalan tidak terus menolak permintaan setelah database pulih.
+  let readyPromise = null;
+  const prepare = () => {
+    if (!readyPromise) {
+      readyPromise = (async () => {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('SELECT pg_advisory_xact_lock(820814)');
+          await client.query(schema(true));
+          await client.query(PG_LOCKDOWN);
+          await client.query('COMMIT');
+          client.release();
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => {});
+          client.release(true); // koneksi ini dibuang agar tidak dipakai lagi dalam keadaan rusak
+          throw e;
+        }
+      })();
+      readyPromise.catch(e => {
+        console.error('Gagal menyiapkan database:', e.code || '', e.message);
+        readyPromise = null;
+      });
+    }
+    return readyPromise;
+  };
+  Object.defineProperty(db, 'ready', { get: prepare, enumerable: true });
+  prepare();
   return db;
 }
 
